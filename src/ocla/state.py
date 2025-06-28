@@ -5,12 +5,14 @@ import json
 
 STATE_FILE = os.path.join(".ocla", "state.json")
 
+
 @dataclasses.dataclass
 class State:
     current_session: Optional[str] = None
     default_model: Optional[str] = ""
 
     # TODO Resolve value from env, state prop or default value.
+
 
 def load_state() -> State:
     try:
@@ -19,6 +21,7 @@ def load_state() -> State:
         return State(**data)
     except (FileNotFoundError, json.JSONDecodeError, TypeError):
         return State()
+
 
 def save_state(state: State) -> None:
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
