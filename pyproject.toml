@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ollama-cli-code-agent"
+name = "okda"
 version = "0.1.0"
 description = "CLI agent using ollama for local LLMs"
 requires-python = ">=3.9"
@@ -11,4 +11,7 @@ authors = [{name = "Example", email = "example@example.com"}]
 dependencies = ["ollama"]
 
 [project.scripts]
-ollama-cli-code-agent = "ollama_cli_code_agent.cli:main"
+okda = "okda.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

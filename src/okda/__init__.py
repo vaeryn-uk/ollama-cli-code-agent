@@ -1,4 +1,4 @@
-"""Ollama CLI Code Agent"""
+"""OKDA - Ollama Knowledge Development Agent"""
 
 __all__ = ["Session", "chat_with_tools"]
 

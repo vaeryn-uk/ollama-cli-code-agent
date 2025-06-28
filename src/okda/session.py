@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 
-SESSION_DIR = ".ollama-cli-code-agent"
+SESSION_DIR = ".okda"
 
 @dataclass
 class Session:
