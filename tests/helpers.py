@@ -15,6 +15,10 @@ def content(text: str) -> dict:
 def tool_call(call: dict) -> dict:
     return {"message": {"role": "assistant", "content": "", "tool_calls": [call]}}
 
+def permit_all_tool_calls(monkeypatch, allow: bool = True):
+    monkeypatch.setattr("ocla.cli._confirm_tool", lambda call: allow)
+
+
 def assert_scenario_completed(scenario: str):
     req = Request(f"{WIREMOCK_BASE_URL.rstrip('/')}/__admin/scenarios")
     with urlopen(req) as resp:

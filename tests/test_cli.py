@@ -1,6 +1,6 @@
 from io import StringIO
 import sys
-from .helpers import mock_ollama_responses, content, tool_call, assert_scenario_completed
+from .helpers import mock_ollama_responses, content, tool_call, assert_scenario_completed, permit_all_tool_calls
 from ocla.cli import main as cli_main
 
 
@@ -23,7 +23,7 @@ def test_cli_tool_called(monkeypatch, capsys):
     )
 
     monkeypatch.setattr(sys, "stdin", StringIO("done"))
-    monkeypatch.setattr("ocla.cli._confirm_tool", lambda call: True)
+    permit_all_tool_calls(monkeypatch)
 
     cli_main([])
     captured = capsys.readouterr()
