@@ -9,11 +9,14 @@ from .conftest import WIREMOCK_BASE_URL
 
 SCENARIO_COMPLETE_STATE = "completed"
 
+
 def content(text: str) -> dict:
     return {"message": {"role": "assistant", "content": text}}
 
+
 def tool_call(call: dict) -> dict:
     return {"message": {"role": "assistant", "content": "", "tool_calls": [call]}}
+
 
 def permit_all_tool_calls(monkeypatch, allow: bool = True):
     monkeypatch.setattr("ocla.cli._confirm_tool", lambda call: allow)
@@ -32,7 +35,10 @@ def assert_scenario_completed(scenario: str):
     if found is None:
         pytest.fail(f"Scenario '{scenario}' not found in WireMock")
     elif found != SCENARIO_COMPLETE_STATE:
-        pytest.fail(f"Scenario '{scenario}' ended in state '{found}', not '{SCENARIO_COMPLETE_STATE}'")
+        pytest.fail(
+            f"Scenario '{scenario}' ended in state '{found}', not '{SCENARIO_COMPLETE_STATE}'"
+        )
+
 
 def mock_ollama_responses(
     *bodies: dict,

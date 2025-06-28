@@ -1,6 +1,12 @@
 from io import StringIO
 import sys
-from .helpers import mock_ollama_responses, content, tool_call, assert_scenario_completed, permit_all_tool_calls
+from .helpers import (
+    mock_ollama_responses,
+    content,
+    tool_call,
+    assert_scenario_completed,
+    permit_all_tool_calls,
+)
 from ocla.cli import main as cli_main
 
 
@@ -18,8 +24,7 @@ def test_cli_simple_reply(monkeypatch, capsys):
 
 def test_cli_tool_called(monkeypatch, capsys):
     scenario = mock_ollama_responses(
-        tool_call({"function": {"name": "ls", "arguments": {}}}),
-        content("done")
+        tool_call({"function": {"name": "ls", "arguments": {}}}), content("done")
     )
 
     monkeypatch.setattr(sys, "stdin", StringIO("done"))
@@ -30,4 +35,3 @@ def test_cli_tool_called(monkeypatch, capsys):
     assert captured.out.strip() == "done"
 
     assert_scenario_completed(scenario)
-
