@@ -1,6 +1,8 @@
 import argparse
 import json
 import subprocess
+
+from ocla.state import load_state
 from ocla.session import (
     Session,
     list_sessions,
@@ -17,6 +19,8 @@ TOOLS: Dict[str, Callable[..., Any]] = {
     "ls": ls,
     # "other": other_fn,
 }
+
+DEFAULT_MODEL = "qwen2.5"
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     fn = TOOLS.get(call.function.name)
@@ -50,7 +54,7 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
 
 def chat_with_tools(model: str, session: Session, prompt: str) -> str:
     session.add({"role": "user", "content": prompt})
-    response = ollama.chat(model=model, messages=session.messages, tools=list(TOOLS.values()))
+    response = ollama.chat(model=load_state().default_model or default_model, messages=session.messages, tools=list(TOOLS.values()))
     message = response.get("message", {})
     session.add(message)
 
@@ -115,7 +119,10 @@ def main(argv=None):
             print(name)
         elif args.session_cmd == "list":
             for s in list_sessions():
-                print(s)
+                if get_current_session_name() == s:
+                    print(f"> {s}")
+                else:
+                    print(f"  {s}")
         elif args.session_cmd == "set":
             if args.name not in list_sessions():
                 parser.error(f"Unknown session: {args.name}")
