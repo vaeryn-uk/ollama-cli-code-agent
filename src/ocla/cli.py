@@ -2,37 +2,71 @@ import argparse
 import json
 import subprocess
 from ocla.session import Session
+from ocla.tools import ls
 import ollama
 import sys
+from typing import List, Dict, Callable, Any
 
+TOOLS: Dict[str, Callable[..., Any]] = {
+    "ls": ls,
+    # "other": other_fn,
+}
 
-def execute_tool(call: dict) -> str:
-    function = call.get("function", {})
-    name = function.get("name")
-    raw_args = function.get("arguments", "{}")
+def execute_tool(call: ollama.Message.ToolCall) -> str:
+    fn = TOOLS.get(call.function.name)
+    if fn is None:
+        raise KeyError(f"Unknown tool: {call.function.name}")
+    result = fn(**(call.function.arguments or {}))
+    return str(result)
+
+def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
+    """
+    Ask the user whether to run this tool call.
+    Returns True only if the reply begins with 'y' or 'Y'.
+    Defaults to False if stdin is not a TTY (e.g. piped input).
+    """
+    if not sys.stdin.isatty():
+        print(f"not a tty so skipping tool call {call.function.name} as no permission can be attained")
+        return False                                 # non-interactive → skip
+
+    fn       = call.function.name
+    raw_args = call.function.arguments
     try:
-        args = json.loads(raw_args)
-    except json.JSONDecodeError:
-        args = {}
-    if name == "shell":
-        cmd = args.get("cmd") or args.get("command")
-        if not cmd:
-            return "No command provided"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        return result.stdout + result.stderr
-    return f"Unknown tool {name}"
+        if isinstance(raw_args, (dict, list)):
+            args = json.dumps(raw_args, separators=(",", ":"))
+        else:
+            args = str(raw_args)
+    except TypeError:
+        args = str(raw_args)
 
+    reply = input(f"Run tool '{fn}'? Arguments: {args} [y/N] ").strip().lower()
+    return reply.startswith("y")
 
 def chat_with_tools(model: str, session: Session, prompt: str) -> str:
     session.add({"role": "user", "content": prompt})
-    response = ollama.chat(model=model, messages=session.messages)
+    response = ollama.chat(model=model, messages=session.messages, tools=list(TOOLS.values()))
     message = response.get("message", {})
     session.add(message)
 
     if "tool_calls" in message:
         for call in message["tool_calls"]:
-            output = execute_tool(call)
-            session.add({"role": "tool", "content": output, "name": call.get("function", {}).get("name")})
+            if _confirm_tool(call):  # ← check with user
+                output = execute_tool(call)
+                session.add(
+                    {
+                        "role": "tool",
+                        "content": output,
+                        "name": call.function.name,
+                    }
+                )
+            else:
+                session.add(
+                    {
+                        "role": "tool",
+                        "content": "skipped tool execution because the user did not allow it",
+                        "name": call.function.name,
+                    }
+                )
         response = ollama.chat(model=model, messages=session.messages)
         message = response.get("message", {})
         session.add(message)

@@ -27,6 +27,6 @@ class Session:
 
     def add(self, message: Dict[str, Any]):
         if isinstance(message, ollama.Message):
-            message = message.__dict__
+            message = message.model_dump(mode="python", by_alias=True)
 
         self.messages.append(message)
