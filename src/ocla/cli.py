@@ -1,14 +1,19 @@
 import argparse
 import json
 import subprocess
+import humanize
+from datetime import datetime
+from tzlocal import get_localzone
 
+from rich.console import Console
+from rich.table import Table
 from ocla.state import load_state
 from ocla.session import (
     Session,
     list_sessions,
     set_current_session_name,
     get_current_session_name,
-    generate_session_name,
+    generate_session_name, session_exists,
 )
 from ocla.tools import ls
 import ollama
@@ -118,13 +123,24 @@ def main(argv=None):
             set_current_session_name(name)
             print(name)
         elif args.session_cmd == "list":
+
+            table = Table(show_header=True, header_style="bold")
+
+            table.add_column("Session")
+            table.add_column("Created")
+            table.add_column("Last Used")
+            rows = []
             for s in list_sessions():
-                if get_current_session_name() == s:
-                    print(f"> {s}")
-                else:
-                    print(f"  {s}")
+                print(s.name)
+                table.add_row(*(
+                    f"> {s.name}" if get_current_session_name() == s.name else f"  {s.name}",
+                    humanize.naturaltime(datetime.now(get_localzone()) - s.created),
+                    humanize.naturaltime(datetime.now(get_localzone()) - s.used),
+                ))
+
+            Console().print(table)
         elif args.session_cmd == "set":
-            if args.name not in list_sessions():
+            if not session_exists(args.name):
                 parser.error(f"Unknown session: {args.name}")
             set_current_session_name(args.name)
         else:
