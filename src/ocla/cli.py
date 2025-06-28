@@ -54,7 +54,7 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
 
 def chat_with_tools(model: str, session: Session, prompt: str) -> str:
     session.add({"role": "user", "content": prompt})
-    response = ollama.chat(model=load_state().default_model or default_model, messages=session.messages, tools=list(TOOLS.values()))
+    response = ollama.chat(model=load_state().default_model or DEFAULT_MODEL, messages=session.messages, tools=list(TOOLS.values()))
     message = response.get("message", {})
     session.add(message)
 
