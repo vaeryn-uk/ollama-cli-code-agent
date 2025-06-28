@@ -3,6 +3,7 @@ import json
 import subprocess
 from ocla.session import Session
 import ollama
+import sys
 
 
 def execute_tool(call: dict) -> str:
@@ -39,19 +40,31 @@ def chat_with_tools(model: str, session: Session, prompt: str) -> str:
     session.save()
     return message.get("content", "")
 
+def read_prompt_from_stdin() -> str:
+    if sys.stdin.isatty():          # launched interactively with no pipe
+        return input("prompt> ")    # one-liner; could also loop for multi-turn
+    return sys.stdin.read()         # piped or redirected data
+
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Interact with a local ollama model")
+    parser = argparse.ArgumentParser(
+        description="Interact with a local Ollama model",
+    )
     parser.add_argument("prompt", nargs="*", help="Message to send to the model")
     parser.add_argument("-m", "--model", default="codellama", help="Model name")
     parser.add_argument("-s", "--session", default="default", help="Session name")
     parser.add_argument("--reset", action="store_true", help="Reset the session history")
     args = parser.parse_args(argv)
 
-    msg = " ".join(args.prompt)
+    # Prefer positional argument; otherwise use stdin
+    msg = " ".join(args.prompt).strip() or read_prompt_from_stdin().strip()
+    if not msg:
+        parser.error("No prompt supplied via arguments or stdin.")
+
     session = Session(args.session)
     if args.reset:
         session.messages = []
+
     output = chat_with_tools(args.model, session, msg)
     print(output)
 
