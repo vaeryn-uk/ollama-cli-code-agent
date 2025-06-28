@@ -63,14 +63,35 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     return reply.startswith("y")
 
 
-def do_chat(model: str, session: Session, prompt: str) -> str:
-    session.add({"role": "user", "content": prompt})
-    response = ollama.chat(
-        model=load_state().default_model or DEFAULT_MODEL,
-        messages=session.messages,
-        tools=list(TOOLS.values()),
-    )
+def _chat_stream(**kwargs) -> tuple[str, dict]:
+    content: list[str] = []
+    last_message: dict = {}
+    for chunk in ollama.chat(**kwargs, stream=True):
+        msg = chunk.get("message", {})
+        part = msg.get("content", "")
+        if part:
+            print(part, end="", flush=True)
+            content.append(part)
+        last_message = msg
+    print()
+    return "".join(content), last_message
+
+
+def _chat_once(**kwargs) -> tuple[str, dict]:
+    response = ollama.chat(**kwargs)
     message = response.get("message", {})
+    return message.get("content", ""), message
+
+
+def do_chat(model: str, session: Session, prompt: str, *, stream: bool = False) -> str:
+    session.add({"role": "user", "content": prompt})
+    chat_args = {
+        "model": load_state().default_model or DEFAULT_MODEL,
+        "messages": session.messages,
+        "tools": list(TOOLS.values()),
+    }
+
+    content, message = _chat_stream(**chat_args) if stream else _chat_once(**chat_args)
     session.add(message)
 
     if "tool_calls" in message:
@@ -92,12 +113,15 @@ def do_chat(model: str, session: Session, prompt: str) -> str:
                         "name": call.function.name,
                     }
                 )
-        response = ollama.chat(model=model, messages=session.messages)
-        message = response.get("message", {})
+        followup_args = {"model": model, "messages": session.messages}
+        more, message = (
+            _chat_stream(**followup_args) if stream else _chat_once(**followup_args)
+        )
+        content += more
         session.add(message)
 
     session.save()
-    return message.get("content", "")
+    return content
 
 
 def read_prompt_from_stdin() -> str:
@@ -114,6 +138,11 @@ def main(argv=None):
     parser.add_argument("--session", help="Override session name")
     parser.add_argument(
         "--reset", action="store_true", help="Reset the session history"
+    )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Stream responses as they are generated",
     )
 
     subparsers = parser.add_subparsers(dest="command")
@@ -178,8 +207,9 @@ def main(argv=None):
     if args.reset:
         session.messages = []
 
-    output = do_chat(args.model, session, msg)
-    print(output)
+    output = do_chat(args.model, session, msg, stream=args.stream)
+    if not args.stream:
+        print(output)
 
 
 if __name__ == "__main__":
