@@ -104,14 +104,8 @@ def main(argv=None):
     session_set = session_sub.add_parser("set", help="Set current session")
     session_set.add_argument("name")
 
-    chat_parser = subparsers.add_parser("chat", help="Chat with the model")
-    chat_parser.add_argument("prompt", nargs="*", help="Message to send to the model")
-
-    # if no command is provided default to chat
-    if argv and argv[0] not in {"session", "chat"}:
-        argv = ["chat"] + (argv or [])
-
-    args = parser.parse_args(argv)
+    # parse args but allow extra positional arguments as the prompt
+    args, prompt_parts = parser.parse_known_args(argv)
 
     if args.command == "session":
         if args.session_cmd == "new":
@@ -130,8 +124,8 @@ def main(argv=None):
             session_parser.print_help()
         return
 
-    # Chat command
-    msg = " ".join(args.prompt).strip() or read_prompt_from_stdin().strip()
+    # Treat remaining arguments as the prompt
+    msg = " ".join(prompt_parts).strip() or read_prompt_from_stdin().strip()
     if not msg:
         parser.error("No prompt supplied via arguments or stdin.")
 
