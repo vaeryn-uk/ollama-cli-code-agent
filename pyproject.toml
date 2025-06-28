@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocla"
+version = "0.1.0"
+description = "CLI agent using ollama for local LLMs"
+requires-python = ">=3.9"
+authors = [{name = "Example", email = "example@example.com"}]
+dependencies = ["ollama"]
+
+[project.scripts]
+ocla = "ocla.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
