@@ -1,5 +1,7 @@
 import json
 import os
+import time
+from datetime import timezone
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
@@ -15,38 +17,97 @@ SESSION_DIR = os.path.join(".ocla", "sessions")
 class Session:
     name: str
     path: str = field(init=False)
+    meta_path: str = field(init=False)
     messages: List[Dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self):
-        if not self.name.endswith(".session"):
-            self.name += ".session"
-        self.path = os.path.join(SESSION_DIR, self.name)
+        # file locations
+        self.path = os.path.join(SESSION_DIR, f"{self.name}.session")
+        self.meta_path = os.path.join(SESSION_DIR, f"{self.name}.meta")
+
+        # (1) load messages if the session file exists
         if os.path.exists(self.path):
             with open(self.path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                self.messages = data.get("messages", [])
+                self.messages = json.load(f).get("messages", [])
 
-    def save(self):
+        # (2) load or create metadata
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if os.path.exists(self.meta_path):
+            with open(self.meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            self.created = meta.get("created", now_iso)
+            self.used = meta.get("used", now_iso)
+        else:
+            self.created = now_iso
+            self.used = now_iso
+            self._write_meta()  # create the .meta file immediately
+
+    def _write_meta(self) -> None:
+        os.makedirs(SESSION_DIR, exist_ok=True)
+        with open(self.meta_path, "w", encoding="utf-8") as f:
+            json.dump({"created": self.created, "used": self.used}, f, indent=2)
+
+    def save(self) -> None:
+        """Persist messages and bump 'used' timestamp."""
         os.makedirs(SESSION_DIR, exist_ok=True)
         with open(self.path, "w", encoding="utf-8") as f:
             json.dump({"messages": self.messages}, f, indent=2)
 
-    def add(self, message: Dict[str, Any]):
+        self.used = datetime.now(timezone.utc).isoformat()
+        self._write_meta()
+
+    def add(self, message: Dict[str, Any]) -> None:
+        """Append a message and immediately save the session."""
         if isinstance(message, ollama.Message):
             message = message.model_dump(mode="python", by_alias=True)
 
         self.messages.append(message)
+        self.save()
 
 
 def _ensure_dirs() -> None:
     os.makedirs(SESSION_DIR, exist_ok=True)
 
 
-def list_sessions() -> List[str]:
+@dataclass
+class SessionInfo:
+    name: str
+    created: datetime
+    used: datetime
+
+
+def list_sessions() -> List[SessionInfo]:
     _ensure_dirs()
-    return sorted(
-        [f.removesuffix(".session") for f in os.listdir(SESSION_DIR) if f.endswith(".session")]
-    )
+
+    infos = []
+
+    for f in os.listdir(SESSION_DIR):
+        if not f.endswith(".meta"):
+            continue
+
+        meta_path = os.path.join(SESSION_DIR, f)
+
+        # --- load timestamps from the .meta file ------------------------------
+        with open(meta_path, "r", encoding="utf-8") as fp:
+            meta = json.load(fp)
+
+        # ISO-8601 strings → aware datetimes (UTC)
+        created = datetime.fromisoformat(meta["created"].replace("Z", "+00:00"))
+        used = datetime.fromisoformat(meta["used"].replace("Z", "+00:00"))
+
+        infos.append(
+            SessionInfo(
+                name=f.removesuffix(".meta"),
+                created=created,
+                used=used,
+            )
+        )
+
+    return sorted(infos, key=lambda s: [s.used], reverse=True)
+
+
+def session_exists(name: str) -> bool:
+    return any([x for x in list_sessions() if x.name == name])
 
 
 def get_current_session_name() -> Optional[str]:
@@ -60,4 +121,4 @@ def set_current_session_name(name: str) -> None:
 
 
 def generate_session_name() -> str:
-    return datetime.now().strftime("%Y%m%d%H%M%S") + ".session"
+    return datetime.now().strftime("%Y%m%d%H%M%S")

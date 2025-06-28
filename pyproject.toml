@@ -8,7 +8,12 @@ version = "0.1.0"
 description = "CLI agent using ollama for local LLMs"
 requires-python = ">=3.9"
 authors = [{name = "Example", email = "example@example.com"}]
-dependencies = ["ollama"]
+dependencies = [
+    "ollama",
+    "humanize",
+    "rich",
+    "tzlocal",
+]
 
 [project.scripts]
 ocla = "ocla.cli:main"
