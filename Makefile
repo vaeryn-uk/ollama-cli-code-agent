@@ -9,14 +9,15 @@ init:
 	uv venv $(VENV)
 	uv pip install -e .[$(EXTRAS)] -p $(VENV)
 
+
 test.docker:
 	docker compose -f tests/docker-compose.yml up -d
 
 test:
-	uv run pytest -q
+	uv run -p $(VENV) pytest -q
 
 lint:
-	uv run black --check --diff .
+	uv run -p $(VENV) black --check --diff .
 
 fmt:
-	uv run black .
+	uv run -p $(VENV) black .
