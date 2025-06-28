@@ -1,7 +1,13 @@
 import argparse
 import json
 import subprocess
-from ocla.session import Session
+from ocla.session import (
+    Session,
+    list_sessions,
+    set_current_session_name,
+    get_current_session_name,
+    generate_session_name,
+)
 from ocla.tools import ls
 import ollama
 import sys
@@ -84,18 +90,55 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Interact with a local Ollama model",
     )
-    parser.add_argument("prompt", nargs="*", help="Message to send to the model")
     parser.add_argument("-m", "--model", default="codellama", help="Model name")
-    parser.add_argument("-s", "--session", default="default", help="Session name")
+    parser.add_argument("--session", help="Override session name")
     parser.add_argument("--reset", action="store_true", help="Reset the session history")
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    session_parser = subparsers.add_parser("session", help="Manage sessions")
+    session_sub = session_parser.add_subparsers(dest="session_cmd")
+    session_new = session_sub.add_parser("new", help="Create a new session")
+    session_new.add_argument("name", nargs="?")
+    session_sub.add_parser("list", help="List available sessions")
+    session_set = session_sub.add_parser("set", help="Set current session")
+    session_set.add_argument("name")
+
+    chat_parser = subparsers.add_parser("chat", help="Chat with the model")
+    chat_parser.add_argument("prompt", nargs="*", help="Message to send to the model")
+
+    # if no command is provided default to chat
+    if argv and argv[0] not in {"session", "chat"}:
+        argv = ["chat"] + (argv or [])
+
     args = parser.parse_args(argv)
 
-    # Prefer positional argument; otherwise use stdin
+    if args.command == "session":
+        if args.session_cmd == "new":
+            name = args.name or generate_session_name()
+            Session(name).save()
+            set_current_session_name(name)
+            print(name)
+        elif args.session_cmd == "list":
+            for s in list_sessions():
+                print(s)
+        elif args.session_cmd == "set":
+            if args.name not in list_sessions():
+                parser.error(f"Unknown session: {args.name}")
+            set_current_session_name(args.name)
+        else:
+            session_parser.print_help()
+        return
+
+    # Chat command
     msg = " ".join(args.prompt).strip() or read_prompt_from_stdin().strip()
     if not msg:
         parser.error("No prompt supplied via arguments or stdin.")
 
-    session = Session(args.session)
+    session_name = args.session or get_current_session_name() or generate_session_name()
+    session = Session(session_name)
+    if get_current_session_name() is None:
+        set_current_session_name(session_name)
     if args.reset:
         session.messages = []
 
