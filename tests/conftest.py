@@ -1,51 +1,49 @@
-import json
 import os
-import sys
 import time
-import types
 import urllib.request
 
 import pytest
 
+WIREMOCK_BASE_URL = os.environ.get("WIREMOCK_BASE_URL", "http://localhost:8080")
+os.environ["OLLAMA_HOST"] = WIREMOCK_BASE_URL
 
-@pytest.fixture(scope="session")
-def wiremock_server():
-    base_url = os.environ.get("WIREMOCK_URL", "http://localhost:8080")
+
+@pytest.fixture(scope="session", autouse=True)
+def _wiremock_ready():
     # wait for container to be ready
-    for _ in range(30):
+    ok = False
+    for _ in range(5):
         try:
-            urllib.request.urlopen(base_url + "/__admin/mappings")
+            urllib.request.urlopen(WIREMOCK_BASE_URL + "/__admin/mappings")
+            ok = True
             break
         except Exception:
             time.sleep(1)
-    return base_url
+
+    if not ok:
+        raise RuntimeError("Wiremock unavailable")
+
+    yield
+
+
+def _reset_wiremock():
+    """Remove all stubs and recorded requests."""
+    # DELETE /__admin/mappings clears mappings
+    req = urllib.request.Request(
+        f"{WIREMOCK_BASE_URL}/__admin/mappings", method="DELETE"
+    )
+    urllib.request.urlopen(req)
+
+    urllib.request.urlopen(
+        urllib.request.Request(f"{WIREMOCK_BASE_URL}/__admin/scenarios/reset", method="POST")
+    )
+    urllib.request.urlopen(
+        urllib.request.Request(f"{WIREMOCK_BASE_URL}/__admin/requests", method="DELETE")
+    )
 
 
 @pytest.fixture(autouse=True)
-def fake_ollama(monkeypatch, wiremock_server):
-    base_url = wiremock_server
-
-    def chat(model: str, messages, tools=None):
-        payload = {"model": model, "messages": messages}
-        if tools:
-            payload["tools"] = tools
-        data = json.dumps(payload).encode()
-        req = urllib.request.Request(
-            base_url + "/api/chat",
-            data=data,
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read().decode())
-
-    module = types.ModuleType("ollama")
-    module.chat = chat
-
-    class Message:
-        pass
-
-    module.Message = Message
-    monkeypatch.setitem(sys.modules, "ollama", module)
-    yield module
-    monkeypatch.setitem(sys.modules, "ollama", None)
-
+def _wiremock_reset(_wiremock_ready):
+    """Clear WireMock before each test runs."""
+    _reset_wiremock()
+    yield

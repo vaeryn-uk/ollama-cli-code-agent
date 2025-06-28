@@ -2,11 +2,15 @@ VENV ?= .venv
 
 .PHONY: init test
 
+# extras declared under [project.optional-dependencies] in pyproject.toml
+EXTRAS := test
+
 init:
 	uv venv $(VENV)
-	uv pip install -e . -p $(VENV)
+	uv pip install -e .[$(EXTRAS)] -p $(VENV)
 
 test:
 	docker compose -f tests/docker-compose.yml up -d
-	pytest -q
+	uv run pytest -q
 	docker compose -f tests/docker-compose.yml down -v
+

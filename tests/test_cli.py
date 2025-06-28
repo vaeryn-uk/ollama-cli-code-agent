@@ -1,66 +1,33 @@
-import json
-from urllib import request
-
+from io import StringIO
+import sys
+from .helpers import mock_ollama_responses, content, tool_call, assert_scenario_completed
 from ocla.cli import main as cli_main
 
 
-def add_mapping(wiremock_url: str, mapping: dict) -> None:
-    data = json.dumps(mapping).encode()
-    req = request.Request(
-        wiremock_url + "/__admin/mappings",
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with request.urlopen(req):
-        pass
+def test_cli_simple_reply(monkeypatch, capsys):
+    scenario = mock_ollama_responses(content("pong"))
 
+    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
 
-def test_cli_simple_reply(wiremock_server, capsys):
-    mapping = {
-        "request": {"method": "POST", "url": "/api/chat"},
-        "response": {
-            "status": 200,
-            "jsonBody": {"message": {"role": "assistant", "content": "pong"}},
-        },
-    }
-    add_mapping(wiremock_server, mapping)
-
-    cli_main(["-m", "test", "--session", "simple", "ping"])
+    cli_main([])
     captured = capsys.readouterr()
     assert captured.out.strip() == "pong"
 
+    assert_scenario_completed(scenario)
 
-def test_cli_tool_called(monkeypatch, wiremock_server, capsys):
-    first = {
-        "request": {"method": "POST", "url": "/api/chat"},
-        "response": {
-            "status": 200,
-            "jsonBody": {
-                "message": {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [
-                        {"function": {"name": "ls", "arguments": "{}"}}
-                    ],
-                }
-            },
-        },
-    }
 
-    second = {
-        "request": {"method": "POST", "url": "/api/chat"},
-        "response": {
-            "status": 200,
-            "jsonBody": {"message": {"role": "assistant", "content": "done"}},
-        },
-    }
+def test_cli_tool_called(monkeypatch, capsys):
+    scenario = mock_ollama_responses(
+        tool_call({"function": {"name": "ls", "arguments": {}}}),
+        content("done")
+    )
 
-    add_mapping(wiremock_server, first)
-    add_mapping(wiremock_server, second)
-
+    monkeypatch.setattr(sys, "stdin", StringIO("done"))
     monkeypatch.setattr("ocla.cli._confirm_tool", lambda call: True)
-    cli_main(["-m", "test", "--session", "tool", "list"])
+
+    cli_main([])
     captured = capsys.readouterr()
     assert captured.out.strip() == "done"
+
+    assert_scenario_completed(scenario)
 

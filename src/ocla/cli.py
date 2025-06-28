@@ -57,7 +57,7 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     reply = input(f"Run tool '{fn}'? Arguments: {args} [y/N] ").strip().lower()
     return reply.startswith("y")
 
-def chat_with_tools(model: str, session: Session, prompt: str) -> str:
+def do_chat(model: str, session: Session, prompt: str) -> str:
     session.add({"role": "user", "content": prompt})
     response = ollama.chat(model=load_state().default_model or DEFAULT_MODEL, messages=session.messages, tools=list(TOOLS.values()))
     message = response.get("message", {})
@@ -159,7 +159,7 @@ def main(argv=None):
     if args.reset:
         session.messages = []
 
-    output = chat_with_tools(args.model, session, msg)
+    output = do_chat(args.model, session, msg)
     print(output)
 
 
