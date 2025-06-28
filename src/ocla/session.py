@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 
-SESSION_DIR = ".okda"
+SESSION_DIR = ".ocla"
 
 @dataclass
 class Session:
