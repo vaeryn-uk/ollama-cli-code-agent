@@ -11,7 +11,7 @@ authors = [{name = "Example", email = "example@example.com"}]
 dependencies = ["ollama"]
 
 [project.scripts]
-okda = "okda.cli:main"
+ocla = "ocla.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

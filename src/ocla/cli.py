@@ -1,7 +1,7 @@
 import argparse
 import json
 import subprocess
-from .session import Session
+from ocla.session import Session
 import ollama
 
 

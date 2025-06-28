@@ -3,6 +3,8 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 
+import ollama
+
 SESSION_DIR = ".ocla"
 
 @dataclass
@@ -24,4 +26,7 @@ class Session:
             json.dump({"messages": self.messages}, f, indent=2)
 
     def add(self, message: Dict[str, Any]):
+        if isinstance(message, ollama.Message):
+            message = message.__dict__
+
         self.messages.append(message)
