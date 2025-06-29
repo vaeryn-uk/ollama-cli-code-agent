@@ -1,6 +1,6 @@
 from pathlib import Path
 
-def get_files(path: str = ".", recursive: bool=False) -> list[str]:
+def list_files(path: str = ".", recursive: bool=False) -> list[str]:
     root = Path(path)
 
     if not root.is_dir():

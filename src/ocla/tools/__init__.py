@@ -1,7 +1,7 @@
 import dataclasses
 from typing import Callable, Optional
 import inspect
-from .file_system import get_files, read_file
+from .file_system import list_files, read_file
 
 @dataclasses.dataclass
 class Tool:
@@ -14,6 +14,6 @@ class Tool:
             self.name = self.fn.__name__
 
 ALL : dict[str, Tool] = {
-    "get_files": Tool(fn=get_files),
+    "list_files": Tool(fn=list_files),
     "read_file": Tool(fn=read_file),
 }
