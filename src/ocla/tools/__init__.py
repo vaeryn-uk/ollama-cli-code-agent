@@ -1,7 +1,7 @@
 import dataclasses
 from typing import Callable, Optional
 import inspect
-from .file_system import list_files, read_file, generate_patch
+from .file_system import list_files, read_file, generate_patch, apply_patch, write_file
 
 
 @dataclasses.dataclass
@@ -18,5 +18,5 @@ class Tool:
 ALL: dict[str, Tool] = {
     "list_files": Tool(fn=list_files),
     "read_file": Tool(fn=read_file),
-    "generate_patch": Tool(fn=generate_patch),
+    "write_file": Tool(fn=write_file),
 }

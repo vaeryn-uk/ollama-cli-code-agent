@@ -1,5 +1,7 @@
 from pathlib import Path
 from difflib import unified_diff
+import re
+import patch_ng
 
 
 def list_files(path: str = ".", recursive: bool = False) -> list[str]:
@@ -27,13 +29,9 @@ def read_file(path: str = ".", encoding="utf-8") -> str:
     return file_path.read_text(encoding=encoding)
 
 
-def generate_patch(path: str, new_content: str, encoding: str = "utf-8") -> str:
-    """Return a unified diff patch from ``path`` to ``new_content``."""
+def write_file(path: str, new_content: str, encoding: str = "utf-8") -> None:
     file_path = Path(path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(new_content, encoding=encoding)
 
-    if not file_path.is_file():
-        raise FileNotFoundError(f"{path!r} is not an existing file")
-
-    old_lines = file_path.read_text(encoding=encoding).splitlines(keepends=True)
-    new_lines = new_content.splitlines(keepends=True)
-    return "".join(unified_diff(old_lines, new_lines, fromfile=path, tofile=path))
+    return f"written {len(new_content)} bytes to {path}"
