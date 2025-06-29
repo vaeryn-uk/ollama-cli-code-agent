@@ -12,6 +12,12 @@ from ocla.state import load_state, save_state
 
 SESSION_DIR = os.path.join(".ocla", "sessions")
 
+DEFAULT_SYSTEM_PROMPT = """
+You are a software development agent, helping users understand, write and debug code.
+You are being invoked inside a directory that contains a software project that the user
+is working on.
+"""
+
 
 @dataclass
 class Session:
@@ -41,6 +47,9 @@ class Session:
             self.created = now_iso
             self.used = now_iso
             self._write_meta()  # create the .meta file immediately
+
+        if len(self.messages) == 0:
+            self.add({"role": "system", "content": DEFAULT_SYSTEM_PROMPT})
 
     def _write_meta(self) -> None:
         os.makedirs(SESSION_DIR, exist_ok=True)

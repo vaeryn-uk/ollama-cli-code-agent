@@ -3,6 +3,8 @@ import json
 import subprocess
 import humanize
 from datetime import datetime
+
+from ollama import Message
 from tzlocal import get_localzone
 
 from rich.console import Console
@@ -63,35 +65,48 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     return reply.startswith("y")
 
 
-def _chat_stream(**kwargs) -> tuple[str, dict]:
-    content: list[str] = []
-    last_message: dict = {}
-    for chunk in ollama.chat(**kwargs, stream=True):
+def _chat_stream(**kwargs) -> tuple[str, Message]:
+    content_parts: list[str] = []
+    tool_calls: list[ollama.Message.ToolCall] = []          # gather all tool calls
+    last_role: str | None = None         # keep whatever role we see last
+
+    for chunk in ollama.chat(stream=True, **kwargs):
         msg = chunk.get("message", {})
-        part = msg.get("content", "")
+        last_role = msg.get("role", last_role)
+
+        part = msg.get("content") or ""
         if part:
             print(part, end="", flush=True)
-            content.append(part)
-        last_message = msg
-    print()
-    return "".join(content), last_message
+            content_parts.append(part)
+
+        if "tool_calls" in msg:
+            tool_calls.extend(msg["tool_calls"])
+
+    print()  # newline after streaming output
+
+    full_content = "".join(content_parts)
+
+    # Build a consolidated assistant message
+    assistant_msg = Message(
+        role=last_role or "assistant",
+        content=full_content,
+        tool_calls=tool_calls,
+    )
+
+    return full_content, assistant_msg
 
 
-def _chat_once(**kwargs) -> tuple[str, dict]:
-    response = ollama.chat(**kwargs)
-    message = response.get("message", {})
-    return message.get("content", ""), message
-
-
-def do_chat(model: str, session: Session, prompt: str, *, stream: bool = False) -> str:
+def do_chat(model: str, session: Session, prompt: str) -> str:
     session.add({"role": "user", "content": prompt})
+    model = model or load_state().default_model or DEFAULT_MODEL
+
     chat_args = {
-        "model": load_state().default_model or DEFAULT_MODEL,
+        "model": model,
         "messages": session.messages,
         "tools": list(TOOLS.values()),
     }
 
-    content, message = _chat_stream(**chat_args) if stream else _chat_once(**chat_args)
+    content, message = _chat_stream(**chat_args)
     session.add(message)
 
     if "tool_calls" in message:
@@ -115,7 +130,7 @@ def do_chat(model: str, session: Session, prompt: str, *, stream: bool = False) 
                 )
         followup_args = {"model": model, "messages": session.messages}
         more, message = (
-            _chat_stream(**followup_args) if stream else _chat_once(**followup_args)
+            _chat_stream(**followup_args)
         )
         content += more
         session.add(message)
@@ -134,15 +149,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Interact with a local Ollama model",
     )
-    parser.add_argument("-m", "--model", default="codellama", help="Model name")
     parser.add_argument("--session", help="Override session name")
     parser.add_argument(
         "--reset", action="store_true", help="Reset the session history"
-    )
-    parser.add_argument(
-        "--stream",
-        action="store_true",
-        help="Stream responses as they are generated",
     )
 
     subparsers = parser.add_subparsers(dest="command")
@@ -171,7 +180,6 @@ def main(argv=None):
             table.add_column("Session")
             table.add_column("Created")
             table.add_column("Last Used")
-            rows = []
             for s in list_sessions():
                 print(s.name)
                 table.add_row(
@@ -207,10 +215,9 @@ def main(argv=None):
     if args.reset:
         session.messages = []
 
-    output = do_chat(args.model, session, msg, stream=args.stream)
-    if not args.stream:
-        print(output)
+    do_chat(None, session, msg)
 
 
 if __name__ == "__main__":
     main()
+
