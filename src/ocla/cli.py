@@ -34,6 +34,7 @@ DEFAULT_MODEL = "qwen3"
 _TTY_WIN = "CONIN$"   # Windows console device
 _TTY_NIX = "/dev/tty" # POSIX console device
 
+console = Console()
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     fn = TOOLS.get(call.function.name)
@@ -209,7 +210,7 @@ def main(argv=None):
                     )
                 )
 
-            Console().print(table)
+            console.print(table)
         elif args.session_cmd == "set":
             if not session_exists(args.name):
                 parser.error(f"Unknown session: {args.name}")
