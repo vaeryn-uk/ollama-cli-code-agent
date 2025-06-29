@@ -24,11 +24,13 @@ import ollama
 import sys
 
 DEFAULT_MODEL = "qwen3"
+DEFAULT_CTX_WINDOW = 8192 * 2
 
-_TTY_WIN = "CONIN$"   # Windows console device
-_TTY_NIX = "/dev/tty" # POSIX console device
+_TTY_WIN = "CONIN$"  # Windows console device
+_TTY_NIX = "/dev/tty"  # POSIX console device
 
 console = Console()
+
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
@@ -74,10 +76,12 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
 
 def _chat_stream(**kwargs) -> tuple[str, Message]:
     content_parts: list[str] = []
-    tool_calls: list[ollama.Message.ToolCall] = []          # gather all tool calls
-    last_role: str | None = None         # keep whatever role we see last
+    tool_calls: list[ollama.Message.ToolCall] = []  # gather all tool calls
+    last_role: str | None = None  # keep whatever role we see last
 
-    for chunk in ollama.chat(stream=True, **kwargs):
+    for chunk in ollama.chat(
+        stream=True, options={"num_ctx": DEFAULT_CTX_WINDOW}, **kwargs
+    ):
         msg = chunk.get("message", {})
         last_role = msg.get("role", last_role)
 
@@ -158,7 +162,7 @@ def main(argv=None):
     parser.add_argument(
         "--new-session",
         help="Generate a new session and run in it. This will be made the active session for future commands",
-        action="store_true"
+        action="store_true",
     )
 
     subparsers = parser.add_subparsers(dest="command")
@@ -211,14 +215,16 @@ def main(argv=None):
             session_parser.print_help()
         return
 
+    session_name = args.session or get_current_session_name() or generate_session_name()
+    if args.new_session:
+        session_name = generate_session_name()
+        set_current_session_name(session_name)
+        print(f"Created new session {session_name} and set it as the current session.")
+
     # Treat remaining arguments as the prompt
     msg = " ".join(prompt_parts).strip() or read_prompt_from_stdin().strip()
     if not msg:
         parser.error("No prompt supplied via arguments or stdin.")
-
-    session_name = args.session or get_current_session_name() or generate_session_name()
-    if args.new_session:
-        session_name = generate_session_name()
 
     session = Session(session_name)
     if get_current_session_name() is None:
@@ -229,4 +235,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main()
-

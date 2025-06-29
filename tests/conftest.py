@@ -35,7 +35,9 @@ def _reset_wiremock():
     urllib.request.urlopen(req)
 
     urllib.request.urlopen(
-        urllib.request.Request(f"{WIREMOCK_BASE_URL}/__admin/scenarios/reset", method="POST")
+        urllib.request.Request(
+            f"{WIREMOCK_BASE_URL}/__admin/scenarios/reset", method="POST"
+        )
     )
 
     urllib.request.urlopen(
