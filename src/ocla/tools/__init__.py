@@ -1,29 +1,60 @@
-import dataclasses
+import abc
 import enum
-from typing import Callable, Optional
 import inspect
+import json
+import typing
 from ollama import Message
-from .file_system import list_files, read_file, write_file, write_file_diff
+
+from ..util import pascal_to_snake
+
 
 class ToolSecurity(enum.Enum):
     PERMISSIBLE = "permissible"
     ASK = "ask"
 
-@dataclasses.dataclass
-class Tool:
-    fn: Callable
-    security: ToolSecurity = ToolSecurity.ASK
-    prompt: Optional[Callable[[Message.ToolCall, str], str]] = None
-    name: Optional[str] = None
+class Tool(abc.ABC):
+    """Base class for tools used by the agent."""
 
-    def __post_init__(self) -> None:
-        self._sig = inspect.signature(self.fn)
-        if self.name is None:
-            self.name = self.fn.__name__
+    name: str
+    security: ToolSecurity = ToolSecurity.ASK
+
+    def __init__(self) -> None:
+        self.name = pascal_to_snake(self.__class__.__name__)
+
+        # ``ollama`` relies on ``__name__`` and ``inspect.signature`` when a
+        # callable is passed in as a tool.  We provide both so that instances of
+        # ``Tool`` subclasses behave like regular functions.
+        self.__name__ = self.name
+        self.__signature__ = inspect.signature(self.execute)
+
+    @abc.abstractmethod
+    def execute(self, *args, **kwargs) -> (typing.Any, str):
+        """Execute the tool."""
+
+    def prompt(self, call : Message.ToolCall, yes_no : str) -> str:
+        raw_args = call.function.arguments
+        try:
+            if isinstance(raw_args, (dict, list)):
+                args = json.dumps(raw_args, separators=(",", ":"))
+            else:
+                args = str(raw_args)
+        except TypeError:
+            args = str(raw_args)
+
+        return f"Run tool '{self.name}'? Arguments: {args} {yes_no}"
+
+    def __call__(self, *args, **kwargs):
+        """Allow tools to be passed directly to Ollama."""
+        return self.execute(*args, **kwargs)
+
+
+# Import concrete tool implementations after defining the base class to avoid
+# circular imports.
+from .file_system import ListFiles, ReadFile, WriteFile
 
 
 ALL: dict[str, Tool] = {
-    "list_files": Tool(fn=list_files, security=ToolSecurity.PERMISSIBLE),
-    "read_file": Tool(fn=read_file, security=ToolSecurity.PERMISSIBLE),
-    "write_file": Tool(fn=write_file, security=ToolSecurity.ASK, prompt=write_file_diff),
+    "list_files": ListFiles(),
+    "read_file": ReadFile(),
+    "write_file": WriteFile(),
 }
