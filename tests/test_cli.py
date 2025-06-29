@@ -24,7 +24,7 @@ def test_cli_simple_reply(monkeypatch, capsys):
 
 def test_cli_tool_called(monkeypatch, capsys):
     scenario = mock_ollama_responses(
-        tool_call({"function": {"name": "ls", "arguments": {}}}), content("done")
+        tool_call({"function": {"name": "list_files", "arguments": {}}}), content("done")
     )
 
     monkeypatch.setattr(sys, "stdin", StringIO("done"))

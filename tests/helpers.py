@@ -7,7 +7,7 @@ import pytest
 
 from .conftest import WIREMOCK_BASE_URL
 
-SCENARIO_COMPLETE_STATE = "completed"
+SCENARIO_COMPLETE_STATE = "Completed"
 
 
 def content(text: str) -> dict:

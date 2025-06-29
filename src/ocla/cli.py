@@ -1,8 +1,11 @@
 import argparse
 import json
+import os
 import subprocess
 import humanize
 from datetime import datetime
+
+from ollama import Message
 from tzlocal import get_localzone
 
 from rich.console import Console
@@ -16,39 +19,29 @@ from ocla.session import (
     generate_session_name,
     session_exists,
 )
-from ocla.tools import ls
+from ocla.tools import ALL
 import ollama
 import sys
-from typing import List, Dict, Callable, Any
 
-TOOLS: Dict[str, Callable[..., Any]] = {
-    "ls": ls,
-    # "other": other_fn,
-}
+DEFAULT_MODEL = "qwen3"
 
-DEFAULT_MODEL = "qwen2.5"
+_TTY_WIN = "CONIN$"   # Windows console device
+_TTY_NIX = "/dev/tty" # POSIX console device
 
+console = Console()
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
-    fn = TOOLS.get(call.function.name)
-    if fn is None:
+    entry = ALL.get(call.function.name)
+    if entry is None:
         raise KeyError(f"Unknown tool: {call.function.name}")
-    result = fn(**(call.function.arguments or {}))
+    result = entry.fn(**(call.function.arguments or {}))
     return str(result)
 
 
 def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     """
     Ask the user whether to run this tool call.
-    Returns True only if the reply begins with 'y' or 'Y'.
-    Defaults to False if stdin is not a TTY (e.g. piped input).
     """
-    if not sys.stdin.isatty():
-        print(
-            f"not a tty so skipping tool call {call.function.name} as no permission can be attained"
-        )
-        return False  # non-interactive → skip
-
     fn = call.function.name
     raw_args = call.function.arguments
     try:
@@ -59,45 +52,96 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     except TypeError:
         args = str(raw_args)
 
-    reply = input(f"Run tool '{fn}'? Arguments: {args} [y/N] ").strip().lower()
-    return reply.startswith("y")
+    prompt = f"Run tool '{fn}'? Arguments: {args} [y/N] "
+
+    # 1. Fast path – stdin is already a TTY
+    if sys.stdin.isatty():
+        reply = input(prompt)
+        return reply.strip().lower().startswith("y")
+
+    # 2. Try to open the controlling terminal directly
+    tty_name = _TTY_WIN if os.name == "nt" else _TTY_NIX
+    try:
+        with open(tty_name, "r") as tty_in, open(tty_name, "w") as tty_out:
+            tty_out.write(prompt)
+            tty_out.flush()
+            reply = tty_in.readline()
+        return reply.strip().lower().startswith("y")
+    except OSError:
+        # No terminal (cron, CI, docker without TTY, etc.)
+        return False
 
 
-def do_chat(model: str, session: Session, prompt: str) -> str:
-    session.add({"role": "user", "content": prompt})
-    response = ollama.chat(
-        model=load_state().default_model or DEFAULT_MODEL,
-        messages=session.messages,
-        tools=list(TOOLS.values()),
+def _chat_stream(**kwargs) -> tuple[str, Message]:
+    content_parts: list[str] = []
+    tool_calls: list[ollama.Message.ToolCall] = []          # gather all tool calls
+    last_role: str | None = None         # keep whatever role we see last
+
+    for chunk in ollama.chat(stream=True, **kwargs):
+        msg = chunk.get("message", {})
+        last_role = msg.get("role", last_role)
+
+        part = msg.get("content") or ""
+        if part:
+            print(part, end="", flush=True)
+            content_parts.append(part)
+
+        if "tool_calls" in msg:
+            tool_calls.extend(msg["tool_calls"])
+
+    print()  # newline after streaming output
+
+    full_content = "".join(content_parts)
+
+    # Build a consolidated assistant message
+    assistant_msg = Message(
+        role=last_role or "assistant",
+        content=full_content,
+        tool_calls=tool_calls,
     )
-    message = response.get("message", {})
-    session.add(message)
 
-    if "tool_calls" in message:
-        for call in message["tool_calls"]:
-            if _confirm_tool(call):  # ← check with user
-                output = execute_tool(call)
-                session.add(
-                    {
-                        "role": "tool",
-                        "content": output,
-                        "name": call.function.name,
-                    }
-                )
+    return full_content, assistant_msg
+
+
+def do_chat(session: Session, prompt: str) -> str:
+    session.add({"role": "user", "content": prompt})
+    model = load_state().default_model or DEFAULT_MODEL
+
+    accumulated_text: list[str] = []
+
+    while True:
+        # --- 1️⃣  ask the model ------------------------------------------
+        content, msg = _chat_stream(
+            model=model,
+            messages=session.messages,
+            tools=[t.fn for t in ALL.values()],
+        )
+        session.add(msg)
+        if content:
+            accumulated_text.append(content)
+
+        # --- 2️⃣  check for tool-calls ----------------------------------
+        calls = msg.get("tool_calls", [])
+        if not calls:
+            break  # assistant is done, exit loop
+
+        # execute each call, append tool results, then loop again
+        for call in calls:
+            if _confirm_tool(call):
+                tool_output = execute_tool(call)
             else:
-                session.add(
-                    {
-                        "role": "tool",
-                        "content": "skipped tool execution because the user did not allow it",
-                        "name": call.function.name,
-                    }
-                )
-        response = ollama.chat(model=model, messages=session.messages)
-        message = response.get("message", {})
-        session.add(message)
+                tool_output = "skipped tool execution because the user did not allow it"
+
+            session.add(
+                {
+                    "role": "tool",
+                    "name": call.function.name,
+                    "content": tool_output,
+                }
+            )
 
     session.save()
-    return message.get("content", "")
+    return "".join(accumulated_text)
 
 
 def read_prompt_from_stdin() -> str:
@@ -110,10 +154,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Interact with a local Ollama model",
     )
-    parser.add_argument("-m", "--model", default="codellama", help="Model name")
-    parser.add_argument("--session", help="Override session name")
+    parser.add_argument("--session", help="Run in a session for this command only")
     parser.add_argument(
-        "--reset", action="store_true", help="Reset the session history"
+        "--new-session",
+        help="Generate a new session and run in it. This will be made the active session for future commands",
+        action="store_true"
     )
 
     subparsers = parser.add_subparsers(dest="command")
@@ -126,8 +171,10 @@ def main(argv=None):
     session_set = session_sub.add_parser("set", help="Set current session")
     session_set.add_argument("name")
 
-    # parse args but allow extra positional arguments as the prompt
     args, prompt_parts = parser.parse_known_args(argv)
+
+    if args.new_session and args.session:
+        parser.error("Cannot specify both --new-session and --session.")
 
     if args.command == "session":
         if args.session_cmd == "new":
@@ -142,9 +189,7 @@ def main(argv=None):
             table.add_column("Session")
             table.add_column("Created")
             table.add_column("Last Used")
-            rows = []
             for s in list_sessions():
-                print(s.name)
                 table.add_row(
                     *(
                         (
@@ -157,7 +202,7 @@ def main(argv=None):
                     )
                 )
 
-            Console().print(table)
+            console.print(table)
         elif args.session_cmd == "set":
             if not session_exists(args.name):
                 parser.error(f"Unknown session: {args.name}")
@@ -172,15 +217,16 @@ def main(argv=None):
         parser.error("No prompt supplied via arguments or stdin.")
 
     session_name = args.session or get_current_session_name() or generate_session_name()
+    if args.new_session:
+        session_name = generate_session_name()
+
     session = Session(session_name)
     if get_current_session_name() is None:
         set_current_session_name(session_name)
-    if args.reset:
-        session.messages = []
 
-    output = do_chat(args.model, session, msg)
-    print(output)
+    do_chat(session, msg)
 
 
 if __name__ == "__main__":
     main()
+
