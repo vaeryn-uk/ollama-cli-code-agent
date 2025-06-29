@@ -10,7 +10,7 @@ from tzlocal import get_localzone
 
 from rich.table import Table
 
-from ocla.cli_io import info, console, agent_output, error
+from ocla.cli_io import info, console, agent_output, error, interactive_prompt
 from ocla.state import load_state
 from ocla.session import (
     Session,
@@ -24,19 +24,36 @@ from ocla.tools import ALL, ToolSecurity
 import ollama
 import sys
 
+from ocla.util import truncate
+
 DEFAULT_MODEL = "qwen3"
 DEFAULT_CTX_WINDOW = 8192 * 2
 TOOL_RESULT_TRUNCATE_LENGTH = 88
 
-_TTY_WIN = "CONIN$"  # Windows console device
-_TTY_NIX = "/dev/tty"  # POSIX console device
-
-
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
+
+    result = None
+
     if entry is None:
-        raise KeyError(f"Unknown tool: {call.function.name}")
-    result = str(entry.execute(**(call.function.arguments or {})))
+        err = f"Unknown tool: {call.function.name}"
+    else:
+        try:
+            result, err = entry.execute(**(call.function.arguments or {}))
+            result = str(result)
+        except Exception as e:
+            err = f"Unknown error"
+
+    info(f"Executed tool '{call.function.name}'")
+
+    if not result and not err:
+        err = f"Unknown error"
+
+    if err:
+        error(err)
+    else:
+        info(f"Result: {truncate(result, TOOL_RESULT_TRUNCATE_LENGTH).replace('\n', '')}")
+
     return result
 
 
@@ -52,37 +69,20 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
         return False
 
     if tool.security == ToolSecurity.PERMISSIBLE:
+        info(f"Automatically allowing use of tool '{fn}'")
         return True
 
-    if tool.prompt:
-        prompt = tool.prompt(call, "[y/N]")
-    else:
-        raw_args = call.function.arguments
-        try:
-            if isinstance(raw_args, (dict, list)):
-                args = json.dumps(raw_args, separators=(",", ":"))
-            else:
-                args = str(raw_args)
-        except TypeError:
-            args = str(raw_args)
-        prompt = f"Run tool '{fn}'? Arguments: {args} [y/N] "
+    prompt = tool.prompt(call, "[y/N]")
 
-    # 1. Fast path – stdin is already a TTY
-    if sys.stdin.isatty():
-        reply = input()
-        return reply.strip().lower().startswith("y")
+    reply = interactive_prompt(prompt)
 
-    # 2. Try to open the controlling terminal directly
-    tty_name = _TTY_WIN if os.name == "nt" else _TTY_NIX
-    try:
-        with open(tty_name, "r") as tty_in, open(tty_name, "w") as tty_out:
-            tty_out.write(prompt)
-            tty_out.flush()
-            reply = tty_in.readline()
-        return reply.strip().lower().startswith("y")
-    except OSError:
-        # No terminal (cron, CI, docker without TTY, etc.)
-        return False
+    if reply and reply.strip().lower().startswith("y"):
+        return True
+
+    if reply is None:
+        error("No interactive session to acquire permission from user")
+
+    return False
 
 
 def _chat_stream(**kwargs) -> tuple[str, Message]:
