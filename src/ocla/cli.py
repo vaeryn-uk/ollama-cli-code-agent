@@ -29,7 +29,7 @@ TOOLS: Dict[str, Callable[..., Any]] = {
     # "other": other_fn,
 }
 
-DEFAULT_MODEL = "qwen2.5"
+DEFAULT_MODEL = "qwen3"
 
 _TTY_WIN = "CONIN$"   # Windows console device
 _TTY_NIX = "/dev/tty" # POSIX console device
@@ -108,9 +108,9 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
     return full_content, assistant_msg
 
 
-def do_chat(model: str, session: Session, prompt: str) -> str:
+def do_chat(session: Session, prompt: str) -> str:
     session.add({"role": "user", "content": prompt})
-    model = model or load_state().default_model or DEFAULT_MODEL
+    model = load_state().default_model or DEFAULT_MODEL
 
     chat_args = {
         "model": model,
@@ -161,9 +161,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Interact with a local Ollama model",
     )
-    parser.add_argument("--session", help="Override session name")
+    parser.add_argument("--session", help="Run in a session for this command only")
     parser.add_argument(
-        "--reset", action="store_true", help="Reset the session history"
+        "--new-session",
+        help="Generate a new session and run in it. This will be made the active session for future commands",
+        action="store_true"
     )
 
     subparsers = parser.add_subparsers(dest="command")
@@ -176,8 +178,10 @@ def main(argv=None):
     session_set = session_sub.add_parser("set", help="Set current session")
     session_set.add_argument("name")
 
-    # parse args but allow extra positional arguments as the prompt
     args, prompt_parts = parser.parse_known_args(argv)
+
+    if args.new_session and args.session:
+        parser.error("Cannot specify both --new-session and --session.")
 
     if args.command == "session":
         if args.session_cmd == "new":
@@ -193,7 +197,6 @@ def main(argv=None):
             table.add_column("Created")
             table.add_column("Last Used")
             for s in list_sessions():
-                print(s.name)
                 table.add_row(
                     *(
                         (
@@ -221,13 +224,14 @@ def main(argv=None):
         parser.error("No prompt supplied via arguments or stdin.")
 
     session_name = args.session or get_current_session_name() or generate_session_name()
+    if args.new_session:
+        session_name = generate_session_name()
+
     session = Session(session_name)
     if get_current_session_name() is None:
         set_current_session_name(session_name)
-    if args.reset:
-        session.messages = []
 
-    do_chat(None, session, msg)
+    do_chat(session, msg)
 
 
 if __name__ == "__main__":
