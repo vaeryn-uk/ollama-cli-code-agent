@@ -8,8 +8,9 @@ from datetime import datetime
 from ollama import Message
 from tzlocal import get_localzone
 
-from rich.console import Console
 from rich.table import Table
+
+from ocla.cli_io import info, console, agent_output, error
 from ocla.state import load_state
 from ocla.session import (
     Session,
@@ -19,25 +20,34 @@ from ocla.session import (
     generate_session_name,
     session_exists,
 )
-from ocla.tools import ALL
+from ocla.tools import ALL, ToolSecurity
 import ollama
 import sys
 
 DEFAULT_MODEL = "qwen3"
 DEFAULT_CTX_WINDOW = 8192 * 2
+TOOL_RESULT_TRUNCATE_LENGTH = 88
 
 _TTY_WIN = "CONIN$"  # Windows console device
 _TTY_NIX = "/dev/tty"  # POSIX console device
-
-console = Console()
-
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
     if entry is None:
         raise KeyError(f"Unknown tool: {call.function.name}")
-    result = entry.fn(**(call.function.arguments or {}))
-    return str(result)
+    result = str(entry.fn(**(call.function.arguments or {})))
+
+    if len(result) > TOOL_RESULT_TRUNCATE_LENGTH:
+        truncated = (
+            result[:TOOL_RESULT_TRUNCATE_LENGTH] +
+            f"… (truncated, {len(result) - TOOL_RESULT_TRUNCATE_LENGTH} chars more)"
+        )
+    else:
+        truncated = result
+
+    info(f"Executed tool '{call.function.name}'\nResult: {truncated.replace('\n', ' ')}")
+
+    return result
 
 
 def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
@@ -45,20 +55,31 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     Ask the user whether to run this tool call.
     """
     fn = call.function.name
-    raw_args = call.function.arguments
-    try:
-        if isinstance(raw_args, (dict, list)):
-            args = json.dumps(raw_args, separators=(",", ":"))
-        else:
-            args = str(raw_args)
-    except TypeError:
-        args = str(raw_args)
 
-    prompt = f"Run tool '{fn}'? Arguments: {args} [y/N] "
+    tool = ALL.get(call.function.name)
+    if not tool:
+        error(f"Unknown tool: {fn}")
+        return False
+
+    if tool.security == ToolSecurity.PERMISSIBLE:
+        return True
+
+    if tool.prompt:
+        prompt = tool.prompt(call, "[y/N]")
+    else:
+        raw_args = call.function.arguments
+        try:
+            if isinstance(raw_args, (dict, list)):
+                args = json.dumps(raw_args, separators=(",", ":"))
+            else:
+                args = str(raw_args)
+        except TypeError:
+            args = str(raw_args)
+        prompt = f"Run tool '{fn}'? Arguments: {args} [y/N] "
 
     # 1. Fast path – stdin is already a TTY
     if sys.stdin.isatty():
-        reply = input(prompt)
+        reply = input()
         return reply.strip().lower().startswith("y")
 
     # 2. Try to open the controlling terminal directly
@@ -79,6 +100,8 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
     tool_calls: list[ollama.Message.ToolCall] = []  # gather all tool calls
     last_role: str | None = None  # keep whatever role we see last
 
+    thinking = False
+
     for chunk in ollama.chat(
         stream=True, options={"num_ctx": DEFAULT_CTX_WINDOW}, **kwargs
     ):
@@ -86,14 +109,24 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
         last_role = msg.get("role", last_role)
 
         part = msg.get("content") or ""
+
         if part:
-            print(part, end="", flush=True)
             content_parts.append(part)
+            output = True
+
+            if part == "<think>":
+                thinking = True
+                output = False
+
+            if thinking and part == "</think>":
+                thinking = False
+                output = False
+
+            if output:
+                agent_output(part, thinking=thinking, end="")
 
         if "tool_calls" in msg:
             tool_calls.extend(msg["tool_calls"])
-
-    print()  # newline after streaming output
 
     full_content = "".join(content_parts)
 
@@ -145,6 +178,7 @@ def do_chat(session: Session, prompt: str) -> str:
             )
 
     session.save()
+    info("")
     return "".join(accumulated_text)
 
 
@@ -219,7 +253,7 @@ def main(argv=None):
     if args.new_session:
         session_name = generate_session_name()
         set_current_session_name(session_name)
-        print(f"Created new session {session_name} and set it as the current session.")
+        info(f"Created new session {session_name} and set it as the current session.")
 
     # Treat remaining arguments as the prompt
     msg = " ".join(prompt_parts).strip() or read_prompt_from_stdin().strip()
