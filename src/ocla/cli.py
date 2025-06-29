@@ -107,43 +107,41 @@ def do_chat(session: Session, prompt: str) -> str:
     session.add({"role": "user", "content": prompt})
     model = load_state().default_model or DEFAULT_MODEL
 
-    chat_args = {
-        "model": model,
-        "messages": session.messages,
-        "tools": [x.fn for x in ALL.values()],
-    }
+    accumulated_text: list[str] = []
 
-    content, message = _chat_stream(**chat_args)
-    session.add(message)
-
-    if "tool_calls" in message and message["tool_calls"]:
-        for call in message["tool_calls"]:
-            if _confirm_tool(call):  # ← check with user
-                output = execute_tool(call)
-                session.add(
-                    {
-                        "role": "tool",
-                        "content": output,
-                        "name": call.function.name,
-                    }
-                )
-            else:
-                session.add(
-                    {
-                        "role": "tool",
-                        "content": "skipped tool execution because the user did not allow it",
-                        "name": call.function.name,
-                    }
-                )
-        followup_args = {"model": model, "messages": session.messages}
-        more, message = (
-            _chat_stream(**followup_args)
+    while True:
+        # --- 1️⃣  ask the model ------------------------------------------
+        content, msg = _chat_stream(
+            model=model,
+            messages=session.messages,
+            tools=[t.fn for t in ALL.values()],
         )
-        content += more
-        session.add(message)
+        session.add(msg)
+        if content:
+            accumulated_text.append(content)
+
+        # --- 2️⃣  check for tool-calls ----------------------------------
+        calls = msg.get("tool_calls", [])
+        if not calls:
+            break  # assistant is done, exit loop
+
+        # execute each call, append tool results, then loop again
+        for call in calls:
+            if _confirm_tool(call):
+                tool_output = execute_tool(call)
+            else:
+                tool_output = "skipped tool execution because the user did not allow it"
+
+            session.add(
+                {
+                    "role": "tool",
+                    "name": call.function.name,
+                    "content": tool_output,
+                }
+            )
 
     session.save()
-    return content
+    return "".join(accumulated_text)
 
 
 def read_prompt_from_stdin() -> str:
