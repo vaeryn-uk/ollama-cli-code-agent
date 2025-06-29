@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import subprocess
 import humanize
 from datetime import datetime
@@ -30,6 +31,9 @@ TOOLS: Dict[str, Callable[..., Any]] = {
 
 DEFAULT_MODEL = "qwen2.5"
 
+_TTY_WIN = "CONIN$"   # Windows console device
+_TTY_NIX = "/dev/tty" # POSIX console device
+
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     fn = TOOLS.get(call.function.name)
@@ -42,15 +46,7 @@ def execute_tool(call: ollama.Message.ToolCall) -> str:
 def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     """
     Ask the user whether to run this tool call.
-    Returns True only if the reply begins with 'y' or 'Y'.
-    Defaults to False if stdin is not a TTY (e.g. piped input).
     """
-    if not sys.stdin.isatty():
-        print(
-            f"not a tty so skipping tool call {call.function.name} as no permission can be attained"
-        )
-        return False  # non-interactive → skip
-
     fn = call.function.name
     raw_args = call.function.arguments
     try:
@@ -61,8 +57,24 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     except TypeError:
         args = str(raw_args)
 
-    reply = input(f"Run tool '{fn}'? Arguments: {args} [y/N] ").strip().lower()
-    return reply.startswith("y")
+    prompt = f"Run tool '{fn}'? Arguments: {args} [y/N] "
+
+    # 1. Fast path – stdin is already a TTY
+    if sys.stdin.isatty():
+        reply = input(prompt)
+        return reply.strip().lower().startswith("y")
+
+    # 2. Try to open the controlling terminal directly
+    tty_name = _TTY_WIN if os.name == "nt" else _TTY_NIX
+    try:
+        with open(tty_name, "r") as tty_in, open(tty_name, "w") as tty_out:
+            tty_out.write(prompt)
+            tty_out.flush()
+            reply = tty_in.readline()
+        return reply.strip().lower().startswith("y")
+    except OSError:
+        # No terminal (cron, CI, docker without TTY, etc.)
+        return False
 
 
 def _chat_stream(**kwargs) -> tuple[str, Message]:
