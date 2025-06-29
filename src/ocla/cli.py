@@ -31,22 +31,12 @@ TOOL_RESULT_TRUNCATE_LENGTH = 88
 _TTY_WIN = "CONIN$"  # Windows console device
 _TTY_NIX = "/dev/tty"  # POSIX console device
 
+
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
     if entry is None:
         raise KeyError(f"Unknown tool: {call.function.name}")
-    result = str(entry.fn(**(call.function.arguments or {})))
-
-    if len(result) > TOOL_RESULT_TRUNCATE_LENGTH:
-        truncated = (
-            result[:TOOL_RESULT_TRUNCATE_LENGTH] +
-            f"… (truncated, {len(result) - TOOL_RESULT_TRUNCATE_LENGTH} chars more)"
-        )
-    else:
-        truncated = result
-
-    info(f"Executed tool '{call.function.name}'\nResult: {truncated.replace('\n', ' ')}")
-
+    result = str(entry.execute(**(call.function.arguments or {})))
     return result
 
 
@@ -151,7 +141,7 @@ def do_chat(session: Session, prompt: str) -> str:
         content, msg = _chat_stream(
             model=model,
             messages=session.messages,
-            tools=[t.fn for t in ALL.values()],
+            tools=[t for t in ALL.values()],
         )
         session.add(msg)
         if content:

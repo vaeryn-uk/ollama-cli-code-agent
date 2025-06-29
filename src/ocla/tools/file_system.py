@@ -7,32 +7,44 @@ from rich.console import Console
 
 import ollama
 
-
-def list_files(path: str = ".") -> list[str]:
-    root = Path(path)
-
-    if not root.is_dir():
-        raise NotADirectoryError(path)
-
-    # non-recursive: names only, no sub-dirs
-    return sorted(p.name for p in root.iterdir() if p.is_file())
+from . import Tool, ToolSecurity
 
 
-def read_file(path: str = ".", encoding="utf-8") -> str:
-    file_path = Path(path)
+class ListFiles(Tool):
+    """Return a list of file names in the given directory."""
 
-    if not file_path.is_file():
-        raise FileNotFoundError(f"{path!r} is not an existing file")
+    security = ToolSecurity.PERMISSIBLE
 
-    return file_path.read_text(encoding=encoding)
+    def execute(self, path: str = ".") -> list[str]:
+        root = Path(path)
+        if not root.is_dir():
+            raise NotADirectoryError(path)
+        # non-recursive: names only, no sub-dirs
+        return sorted(p.name for p in root.iterdir() if p.is_file())
 
 
-def write_file(path: str, new_content: str, encoding: str = "utf-8") -> str:
-    file_path = Path(path)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(new_content, encoding=encoding)
+class ReadFile(Tool):
+    """Read the contents of a file."""
 
-    return f"written {len(new_content)} bytes to {path}"
+    security = ToolSecurity.PERMISSIBLE
+
+    def execute(self, path: str = ".", encoding: str = "utf-8") -> str:
+        file_path = Path(path)
+        if not file_path.is_file():
+            raise FileNotFoundError(f"{path!r} is not an existing file")
+        return file_path.read_text(encoding=encoding)
+
+
+class WriteFile(Tool):
+    """Write content to a file."""
+
+    security = ToolSecurity.ASK
+
+    def execute(self, path: str, new_content: str, encoding: str = "utf-8") -> str:
+        file_path = Path(path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(new_content, encoding=encoding)
+        return f"written {len(new_content)} bytes to {path}"
 
 
 def write_file_diff(call: ollama.Message.ToolCall, yes_no: str) -> str:
@@ -60,7 +72,7 @@ def write_file_diff(call: ollama.Message.ToolCall, yes_no: str) -> str:
             new_lines,
             fromfile=path,
             tofile=path,
-            lineterm=""  # no extra newline per hunk line; keeps output clean
+            lineterm="",  # no extra newline per hunk line; keeps output clean
         )
     )
 
@@ -76,3 +88,7 @@ def write_file_diff(call: ollama.Message.ToolCall, yes_no: str) -> str:
     info(f"Do you want to proceed? {yes_no}", con=console)
 
     return console.export_text(styles=True)
+
+
+# Bind the confirmation prompt to the WriteFile tool
+WriteFile.prompt = staticmethod(write_file_diff)
