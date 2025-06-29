@@ -122,7 +122,7 @@ def do_chat(session: Session, prompt: str) -> str:
     content, message = _chat_stream(**chat_args)
     session.add(message)
 
-    if "tool_calls" in message:
+    if "tool_calls" in message and message["tool_calls"]:
         for call in message["tool_calls"]:
             if _confirm_tool(call):  # ← check with user
                 output = execute_tool(call)
