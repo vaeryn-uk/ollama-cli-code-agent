@@ -19,15 +19,9 @@ from ocla.session import (
     generate_session_name,
     session_exists,
 )
-from ocla.tools import ls
+from ocla.tools import ALL
 import ollama
 import sys
-from typing import List, Dict, Callable, Any
-
-TOOLS: Dict[str, Callable[..., Any]] = {
-    "ls": ls,
-    # "other": other_fn,
-}
 
 DEFAULT_MODEL = "qwen3"
 
@@ -37,10 +31,10 @@ _TTY_NIX = "/dev/tty" # POSIX console device
 console = Console()
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
-    fn = TOOLS.get(call.function.name)
-    if fn is None:
+    entry = ALL.get(call.function.name)
+    if entry is None:
         raise KeyError(f"Unknown tool: {call.function.name}")
-    result = fn(**(call.function.arguments or {}))
+    result = entry.fn(**(call.function.arguments or {}))
     return str(result)
 
 
@@ -116,7 +110,7 @@ def do_chat(session: Session, prompt: str) -> str:
     chat_args = {
         "model": model,
         "messages": session.messages,
-        "tools": list(TOOLS.values()),
+        "tools": [x.fn for x in ALL.values()],
     }
 
     content, message = _chat_stream(**chat_args)
