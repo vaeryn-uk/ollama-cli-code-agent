@@ -27,41 +27,43 @@ import sys
 
 _LOG_LEVEL = LOG_LEVEL.get()
 
-logging.basicConfig(level=_LOG_LEVEL)
+# Skip application if we don't have a valid log level; we'll error out later in the CLI.
+if LOG_LEVEL.validator_fn(LOG_LEVEL.get()) == "":
+    logging.basicConfig(level=_LOG_LEVEL)
 
-# Configure httpx underneath ollama client.
-logging.config.dictConfig(
-    {
-        "version": 1,
-        "disable_existing_loggers": False,  # keep everything already configured
-        "formatters": {
-            "http": {
-                "format": "%(levelname)s [%(asctime)s] %(name)s - %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            }
-        },
-        "handlers": {
-            "http": {
-                "class": "logging.StreamHandler",
-                "formatter": "http",
-                "level": _LOG_LEVEL,  # this handler sees all httpx debug
-                "stream": "ext://sys.stderr",
+    # Configure httpx underneath ollama client.
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,  # keep everything already configured
+            "formatters": {
+                "http": {
+                    "format": "%(levelname)s [%(asctime)s] %(name)s - %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                }
             },
-        },
-        "loggers": {
-            "httpx": {
-                "handlers": ["http"],
-                "level": _LOG_LEVEL,
-                "propagate": False,
+            "handlers": {
+                "http": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "http",
+                    "level": _LOG_LEVEL,  # this handler sees all httpx debug
+                    "stream": "ext://sys.stderr",
+                },
             },
-            "httpcore": {
-                "handlers": ["http"],
-                "level": _LOG_LEVEL,
-                "propagate": False,
+            "loggers": {
+                "httpx": {
+                    "handlers": ["http"],
+                    "level": _LOG_LEVEL,
+                    "propagate": False,
+                },
+                "httpcore": {
+                    "handlers": ["http"],
+                    "level": _LOG_LEVEL,
+                    "propagate": False,
+                },
             },
-        },
-    }
-)
+        }
+    )
 
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
@@ -240,6 +242,13 @@ def main(argv=None):
 
     if args.new_session and args.session:
         parser.error("Cannot specify both --new-session and --session.")
+
+    for var in CONFIG_VARS.values():
+        if var.validator_fn:
+            if validation_err := var.validator_fn(var.get()):
+                parser.error(
+                    f"Invalid value for {var.name}: {validation_err}"
+                )
 
     if args.command == "session":
         if args.session_cmd == "new":

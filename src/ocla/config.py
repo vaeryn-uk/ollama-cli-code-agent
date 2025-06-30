@@ -2,7 +2,8 @@ import logging
 import os
 import dataclasses
 import json
-from typing import Optional
+from typing import Optional, Callable
+
 
 @dataclasses.dataclass
 class ConfigVar:
@@ -11,6 +12,7 @@ class ConfigVar:
     env: Optional[str] = None
     config_file_property: Optional[str] = None
     default: Optional[str] = None
+    validator_fn: Optional[Callable[[Optional[str]], str]] = None
 
     def get(self) -> str:
         if self.env and os.environ.get(self.env):
@@ -48,6 +50,7 @@ CONTEXT_WINDOW = _var(ConfigVar(
     env="OCLA_CONTEXT_WINDOW",
     config_file_property="contextWindow",
     default=str(8192 * 2),
+    validator_fn=lambda x: "" if x.isdigit() else "must be a positive integer",
 ))
 
 MODEL = _var(ConfigVar(
@@ -64,6 +67,7 @@ LOG_LEVEL = _var(ConfigVar(
     env="OCLA_LOG_LEVEL",
     config_file_property="logLevel",
     default="WARNING",
+    validator_fn=lambda x: "" if x in logging.getLevelNamesMapping().keys() else "must be one of: " + str(logging.getLevelNamesMapping().keys()),
 ))
 
 SESSION_DIR = _var(ConfigVar(
