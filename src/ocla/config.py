@@ -4,6 +4,7 @@ import dataclasses
 import json
 from typing import Optional, Callable
 
+_have_logged_invalid_config = False
 
 @dataclasses.dataclass
 class ConfigVar:
@@ -16,6 +17,8 @@ class ConfigVar:
     allowed_values: Optional[dict[str, str]] = None
 
     def get(self) -> str:
+        global _have_logged_invalid_config
+
         if self.env and os.environ.get(self.env):
             return os.environ.get(self.env)
 
@@ -25,7 +28,9 @@ class ConfigVar:
                     data = json.load(f)
                 return str(data.get(self.config_file_property, self.default))
             except (json.JSONDecodeError, TypeError):
-                logging.warning(f"Config file {CONFIG_FILE.get()} not valid JSON")
+                if not _have_logged_invalid_config:
+                    _have_logged_invalid_config = True
+                    logging.warning(f"Config file {CONFIG_FILE.get()} not valid JSON")
             except FileNotFoundError:
                 pass
 

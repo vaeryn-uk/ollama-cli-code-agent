@@ -231,7 +231,6 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Interact with a local Ollama model",
     )
-    parser.add_argument("--session", help="Run in a session for this command only")
     parser.add_argument(
         "--new-session",
         help="Generate a new session and run in it. This will be made the active session for future commands",
@@ -248,12 +247,9 @@ def main(argv=None):
     session_set = session_sub.add_parser("set", help="Set current session")
     session_set.add_argument("name")
 
-    session_parser = subparsers.add_parser("config", help="Show config")
+    subparsers.add_parser("config", help="Show config information")
 
     args, prompt_parts = parser.parse_known_args(argv)
-
-    if args.new_session and args.session:
-        parser.error("Cannot specify both --new-session and --session.")
 
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():
@@ -318,7 +314,7 @@ def main(argv=None):
         console.print(table)
         return
 
-    session_name = args.session or get_current_session_name() or generate_session_name()
+    session_name = get_current_session_name() or generate_session_name()
     if args.new_session:
         session_name = generate_session_name()
         set_current_session_name(session_name)
