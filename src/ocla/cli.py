@@ -12,7 +12,16 @@ import logging.config
 
 from ocla.util import format_tool_arguments
 from ocla.cli_io import info, console, agent_output, error, interactive_prompt
-from ocla.config import CONTEXT_WINDOW, MODEL, LOG_LEVEL, CONFIG_VARS
+from ocla.config import (
+    CONTEXT_WINDOW,
+    MODEL,
+    LOG_LEVEL,
+    CONFIG_VARS,
+    TOOL_PERMISSION_MODE,
+    DISPLAY_THINKING,
+    TOOL_PERMISSION_MODE_DEFAULT,
+    TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
+)
 from ocla.session import (
     Session,
     list_sessions,
@@ -28,7 +37,7 @@ import sys
 _LOG_LEVEL = LOG_LEVEL.get()
 
 # Skip application if we don't have a valid log level; we'll error out later in the CLI.
-if LOG_LEVEL.validator_fn(LOG_LEVEL.get()) == "":
+if LOG_LEVEL.is_valid():
     logging.basicConfig(level=_LOG_LEVEL)
 
     # Configure httpx underneath ollama client.
@@ -95,9 +104,7 @@ def execute_tool(call: ollama.Message.ToolCall) -> str:
 
 
 def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
-    """
-    Ask the user whether to run this tool call.
-    """
+    """Ask the user whether to run this tool call respecting config."""
     fn = call.function.name
 
     tool = ALL.get(call.function.name)
@@ -105,7 +112,18 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
         error(f"Unknown tool: {fn}")
         return False
 
-    if tool.security == ToolSecurity.PERMISSIBLE:
+    mode = TOOL_PERMISSION_MODE.get()
+
+    if mode == TOOL_PERMISSION_MODE_ALWAYS_ALLOW:
+        info(
+            f"Automatically allowing use of tool '{fn}' ({TOOL_PERMISSION_MODE_ALWAYS_ALLOW} mode)"
+        )
+        return True
+
+    if (
+        mode == TOOL_PERMISSION_MODE_DEFAULT
+        and tool.security == ToolSecurity.PERMISSIBLE
+    ):
         info(f"Automatically allowing use of tool '{fn}'")
         return True
 
@@ -128,6 +146,7 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
     last_role: str | None = None  # keep whatever role we see last
 
     thinking = False
+    show_thinking = DISPLAY_THINKING.get().lower() != "false"
 
     for chunk in ollama.chat(
         stream=True, options={"num_ctx": int(CONTEXT_WINDOW.get())}, **kwargs
@@ -149,7 +168,7 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
                 thinking = False
                 output = False
 
-            if output:
+            if output and (show_thinking or not thinking):
                 agent_output(part, thinking=thinking, end="")
 
         if "tool_calls" in msg:
@@ -219,8 +238,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Interact with a local Ollama model",
     )
-    parser.add_argument("--session", help="Run in a session for this command only")
     parser.add_argument(
+        "-n",
         "--new-session",
         help="Generate a new session and run in it. This will be made the active session for future commands",
         action="store_true",
@@ -236,17 +255,13 @@ def main(argv=None):
     session_set = session_sub.add_parser("set", help="Set current session")
     session_set.add_argument("name")
 
-    session_parser = subparsers.add_parser("config", help="Show config")
+    subparsers.add_parser("config", help="Show config information")
 
     args, prompt_parts = parser.parse_known_args(argv)
 
-    if args.new_session and args.session:
-        parser.error("Cannot specify both --new-session and --session.")
-
     for var in CONFIG_VARS.values():
-        if var.validator_fn:
-            if validation_err := var.validator_fn(var.get()):
-                parser.error(f"Invalid value for {var.name}: {validation_err}")
+        if validation_err := var.validate():
+            parser.error(f"Invalid value for {var.name}: {validation_err}")
 
     if args.command == "session":
         if args.session_cmd == "new":
@@ -291,6 +306,7 @@ def main(argv=None):
         table.add_column("Config Key", style="yellow")
         table.add_column("Default", style="dim")
         table.add_column("Current Value", style="green")
+        table.add_column("Allowed values", style="")
 
         for var in CONFIG_VARS.values():
             table.add_row(
@@ -300,12 +316,19 @@ def main(argv=None):
                 var.config_file_property or "",
                 var.default or "",
                 var.get() or "",
+                (
+                    "\n".join(
+                        [x[0] + ": " + x[1] for x in list(var.allowed_values.items())]
+                    )
+                    if var.allowed_values
+                    else ""
+                ),
             )
 
         console.print(table)
         return
 
-    session_name = args.session or get_current_session_name() or generate_session_name()
+    session_name = get_current_session_name() or generate_session_name()
     if args.new_session:
         session_name = generate_session_name()
         set_current_session_name(session_name)
