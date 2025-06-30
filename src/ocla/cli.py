@@ -28,7 +28,7 @@ import sys
 DEFAULT_MODEL = "qwen3"
 DEFAULT_CTX_WINDOW = 8192 * 2
 
-_LOG_LEVEL = logging.ERROR
+_LOG_LEVEL = logging.DEBUG
 
 logging.basicConfig(level=_LOG_LEVEL)
 
@@ -37,26 +37,31 @@ logging.config.dictConfig({
     "version": 1,
     "disable_existing_loggers": False,  # keep everything already configured
     "formatters": {
-        "httpx": {
+        "http": {
             "format": "%(levelname)s [%(asctime)s] %(name)s - %(message)s",
             "datefmt": "%Y-%m-%d %H:%M:%S",
         }
     },
     "handlers": {
-        "httpx": {
+        "http": {
             "class": "logging.StreamHandler",
-            "formatter": "httpx",
+            "formatter": "http",
             "level": _LOG_LEVEL,  # this handler sees all httpx debug
             "stream": "ext://sys.stderr",
         },
     },
     "loggers": {
         "httpx": {
-            "handlers": ["httpx"],
+            "handlers": ["http"],
             "level": _LOG_LEVEL,
-            "propagate": False,  # avoid double printing via root
+            "propagate": False,
         },
-    }
+        "httpcore": {
+            "handlers": ["http"],
+            "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+    },
 })
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
