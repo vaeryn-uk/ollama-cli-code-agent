@@ -1,16 +1,21 @@
-## Project Layout
+```poem
+In lines of code, both old and new,
+We craft the world with just a few.
+From loops that spin and functions that call,
+We build the dreams that make us bold.
 
-- **.gitignore**: Specifies files to ignore in Git
-- **AGENTS.md**: Documentation for agents
-- **Makefile**: Build automation scripts
-- **pyproject.toml**: Python project configuration
-- **uv.lock**: Poetry lock file for dependencies
-- **README.md**: Project overview and setup instructions
+A keyboard's whisper, a screen's bright light,
+We solve the puzzles, day and night.
+With logic as sharp as a coder's mind,
+We turn the abstract into signed.
 
-### Configuration
+The bugs we chase, the fixes we find,
+Each error a step on the path designed.
+For in the code, both simple and grand,
+We find our purpose, our shared hand.
 
-Configuration values can be set in `.ocla/config.json` or through environment
-variables. Newly added options include:
-
-- `toolPermissionMode` – one of `DEFAULT`, `ASK_ALL`, or `ALLOW_ALLOW`.
-- `displayThinking` – `True` to show LLM thinking output or `False` to hide it.
+So here's to the craft, the art, the science,
+The magic that makes the digital dance.
+In every line, a story to tell,
+We code the future, we code ourselves.
+```

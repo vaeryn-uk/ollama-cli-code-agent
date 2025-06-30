@@ -126,13 +126,13 @@ STATE_FILE = _var(
     )
 )
 
-VALID_TOOL_PERMISSION_MODE_DEFAULT = "DEFAULT"
-VALID_TOOL_PERMISSION_MODE_ALWAYS_ASK = "ALWAYS_ASK"
-VALID_TOOL_PERMISSION_MODE_ALWAYS_ALLOW = "ALWAYS_ALLOW"
+TOOL_PERMISSION_MODE_DEFAULT = "DEFAULT"
+TOOL_PERMISSION_MODE_ALWAYS_ASK = "ALWAYS_ASK"
+TOOL_PERMISSION_MODE_ALWAYS_ALLOW = "ALWAYS_ALLOW"
 VALID_TOOL_PERMISSION_MODES = [
-    VALID_TOOL_PERMISSION_MODE_DEFAULT,
-    VALID_TOOL_PERMISSION_MODE_ALWAYS_ASK,
-    VALID_TOOL_PERMISSION_MODE_ALWAYS_ALLOW
+    TOOL_PERMISSION_MODE_DEFAULT,
+    TOOL_PERMISSION_MODE_ALWAYS_ASK,
+    TOOL_PERMISSION_MODE_ALWAYS_ALLOW
 ]
 
 TOOL_PERMISSION_MODE = _var(
@@ -141,11 +141,11 @@ TOOL_PERMISSION_MODE = _var(
         description="How tools request permission to run",
         env="OCLA_TOOL_PERMISSION_MODE",
         config_file_property="toolPermissionMode",
-        default=VALID_TOOL_PERMISSION_MODE_DEFAULT,
+        default=TOOL_PERMISSION_MODE_DEFAULT,
         allowed_values={
-            VALID_TOOL_PERMISSION_MODE_DEFAULT: "Default: ask for permission for non-trivial tools",
-            VALID_TOOL_PERMISSION_MODE_ALWAYS_ASK: "Always ask for permission for all tools",
-            VALID_TOOL_PERMISSION_MODE_ALWAYS_ALLOW: "Always run any tool; use with caution"
+            TOOL_PERMISSION_MODE_DEFAULT: "Default: ask for permission for non-trivial tools",
+            TOOL_PERMISSION_MODE_ALWAYS_ASK: "Always ask for permission for all tools",
+            TOOL_PERMISSION_MODE_ALWAYS_ALLOW: "Always run any tool; use with caution"
         }
     )
 )
