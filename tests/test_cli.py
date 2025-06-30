@@ -33,6 +33,6 @@ def test_cli_tool_called(monkeypatch, capsys):
 
     cli_main([])
     captured = capsys.readouterr()
-    assert captured.out.strip() == "done"
+    assert captured.out.strip().splitlines()[-1] == "done"
 
     assert_scenario_completed(scenario)

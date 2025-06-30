@@ -30,6 +30,7 @@ DEFAULT_MODEL = "qwen3"
 DEFAULT_CTX_WINDOW = 8192 * 2
 TOOL_RESULT_TRUNCATE_LENGTH = 88
 
+
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
 
@@ -52,7 +53,9 @@ def execute_tool(call: ollama.Message.ToolCall) -> str:
     if err:
         error(err)
     else:
-        info(f"Result: {truncate(result, TOOL_RESULT_TRUNCATE_LENGTH).replace('\n', '')}")
+        info(
+            f"Result: {truncate(result, TOOL_RESULT_TRUNCATE_LENGTH).replace('\n', '')}"
+        )
 
     return result
 

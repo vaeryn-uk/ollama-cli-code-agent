@@ -4,6 +4,7 @@ from difflib import unified_diff
 from ocla.cli_io import info
 from rich.syntax import Syntax
 from rich.console import Console
+from ocla.util import can_access_path
 
 import ollama
 
@@ -17,6 +18,8 @@ class ListFiles(Tool):
 
     def execute(self, path: str = ".") -> (list[str], str):
         root = Path(path)
+        if not can_access_path(root):
+            return [], f"Access denied: {path}"
         if not root.is_dir():
             raise NotADirectoryError(path)
         # non-recursive: names only, no sub-dirs
@@ -30,6 +33,8 @@ class ReadFile(Tool):
 
     def execute(self, path: str = ".", encoding: str = "utf-8") -> (str, str):
         file_path = Path(path)
+        if not can_access_path(file_path):
+            return "", f"Access denied: {path}"
         if not file_path.is_file():
             return "", f"File not found: {path}"
         return file_path.read_text(encoding=encoding), ""
@@ -38,8 +43,12 @@ class ReadFile(Tool):
 class WriteFile(Tool):
     security = ToolSecurity.ASK
 
-    def execute(self, path: str, new_content: str, encoding: str = "utf-8") -> (str, str):
+    def execute(
+        self, path: str, new_content: str, encoding: str = "utf-8"
+    ) -> (str, str):
         file_path = Path(path)
+        if not can_access_path(file_path, forwrite=True):
+            return "", f"Access denied: {path}"
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(new_content, encoding=encoding)
         return f"written {len(new_content)} bytes to {path}", ""
@@ -54,6 +63,9 @@ class WriteFile(Tool):
 
         encoding = args.get("encoding", "utf-8")
         file_path = Path(path)
+
+        if not can_access_path(file_path, forwrite=True):
+            return f"Access denied: {path}"
 
         # Load existing content (empty if the file does not yet exist)
         old_lines = (

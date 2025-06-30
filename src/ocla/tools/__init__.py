@@ -12,6 +12,7 @@ class ToolSecurity(enum.Enum):
     PERMISSIBLE = "permissible"
     ASK = "ask"
 
+
 class Tool(abc.ABC):
     """Base class for tools used by the agent."""
 
@@ -31,7 +32,7 @@ class Tool(abc.ABC):
     def execute(self, *args, **kwargs) -> (typing.Any, str):
         """Execute the tool."""
 
-    def prompt(self, call : Message.ToolCall, yes_no : str) -> str:
+    def prompt(self, call: Message.ToolCall, yes_no: str) -> str:
         raw_args = call.function.arguments
         try:
             if isinstance(raw_args, (dict, list)):
