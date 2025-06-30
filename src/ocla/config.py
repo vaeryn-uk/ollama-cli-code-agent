@@ -1,44 +1,83 @@
+import logging
 import os
 import dataclasses
 import json
 from typing import Optional
 
-CONFIG_FILE = os.path.join(".ocla", "config.json")
-
-
 @dataclasses.dataclass
-class Config:
-    model: str = "qwen3"
-    context_window: int = 8192 * 2
-    log_level: str = "DEBUG"
+class ConfigVar:
+    name: str
+    description: str
+    env: Optional[str] = None
+    config_file_property: Optional[str] = None
+    default: Optional[str] = None
 
+    def get(self) -> str:
+        if self.env and os.environ.get(self.env):
+            return os.environ.get(self.env)
 
-def load_config() -> Config:
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, TypeError):
-        data = {}
+        if self.config_file_property:
+            try:
+                with open(CONFIG_FILE.get(), "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return str(data.get(self.config_file_property, self.default))
+            except (json.JSONDecodeError, TypeError):
+                logging.warning(f"Config file {CONFIG_FILE.get()} not valid JSON")
+            except FileNotFoundError:
+                pass
 
-    config = Config(**data)
+        return self.default
 
-    if env_model := os.environ.get("OCLA_MODEL"):
-        config.model = env_model
+CONFIG_VARS: dict[str, ConfigVar] = {}
 
-    if env_ctx := os.environ.get("OCLA_CONTEXT_WINDOW"):
-        try:
-            config.context_window = int(env_ctx)
-        except ValueError:
-            pass
+def _var(var: ConfigVar) -> ConfigVar:
+    CONFIG_VARS[var.name] = var
+    return var
 
-    if env_level := os.environ.get("OCLA_LOG_LEVEL"):
-        config.log_level = env_level
+CONFIG_FILE = _var(ConfigVar(
+    name="config_file",
+    description="Path to the config file",
+    env="OCLA_CONFIG_FILE",
+    config_file_property=None,
+    default=os.path.join(".", ".ocla", "config.json"),
+))
 
-    return config
+CONTEXT_WINDOW = _var(ConfigVar(
+    name="context_window",
+    description="Context window size in tokens",
+    env="OCLA_CONTEXT_WINDOW",
+    config_file_property="contextWindow",
+    default=str(8192 * 2),
+))
 
+MODEL = _var(ConfigVar(
+    name="model",
+    description="Model name",
+    env="OCLA_MODEL",
+    config_file_property="model",
+    default="qwen3",
+))
 
-def save_config(config: Config) -> None:
-    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    data = {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+LOG_LEVEL = _var(ConfigVar(
+    name="log_level",
+    description="Log level",
+    env="OCLA_LOG_LEVEL",
+    config_file_property="logLevel",
+    default="WARNING",
+))
+
+SESSION_DIR = _var(ConfigVar(
+    name="session_dir",
+    description="Path to the session directory",
+    env="OCLA_SESSION_DIR",
+    config_file_property="sessionDir",
+    default=os.path.join(".", ".ocla", "sessions"),
+))
+
+STATE_FILE = _var(ConfigVar(
+    name="state_file",
+    description="Path to the state file",
+    env="OCLA_STATE_FILE",
+    config_file_property="stateFile",
+    default=os.path.join(".", ".ocla", "state.json"),
+))

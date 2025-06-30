@@ -4,13 +4,12 @@ import time
 from datetime import timezone
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
+from .config import SESSION_DIR
 
 from datetime import datetime
 
 import ollama
 from ocla.state import load_state, save_state
-
-SESSION_DIR = os.path.join(".ocla", "sessions")
 
 DEFAULT_SYSTEM_PROMPT = """
 You are a software development agent named OCLA, helping users understand, write and debug code.
@@ -30,8 +29,8 @@ class Session:
 
     def __post_init__(self):
         # file locations
-        self.path = os.path.join(SESSION_DIR, f"{self.name}.session")
-        self.meta_path = os.path.join(SESSION_DIR, f"{self.name}.meta")
+        self.path = os.path.join(SESSION_DIR.get(), f"{self.name}.session")
+        self.meta_path = os.path.join(SESSION_DIR.get(), f"{self.name}.meta")
 
         # (1) load messages if the session file exists
         if os.path.exists(self.path):
@@ -54,13 +53,13 @@ class Session:
             self.add({"role": "system", "content": DEFAULT_SYSTEM_PROMPT})
 
     def _write_meta(self) -> None:
-        os.makedirs(SESSION_DIR, exist_ok=True)
+        os.makedirs(SESSION_DIR.get(), exist_ok=True)
         with open(self.meta_path, "w", encoding="utf-8") as f:
             json.dump({"created": self.created, "used": self.used}, f, indent=2)
 
     def save(self) -> None:
         """Persist messages and bump 'used' timestamp."""
-        os.makedirs(SESSION_DIR, exist_ok=True)
+        os.makedirs(SESSION_DIR.get(), exist_ok=True)
         with open(self.path, "w", encoding="utf-8") as f:
             json.dump({"messages": self.messages}, f, indent=2)
 
@@ -77,7 +76,7 @@ class Session:
 
 
 def _ensure_dirs() -> None:
-    os.makedirs(SESSION_DIR, exist_ok=True)
+    os.makedirs(SESSION_DIR.get(), exist_ok=True)
 
 
 @dataclass
@@ -92,11 +91,11 @@ def list_sessions() -> List[SessionInfo]:
 
     infos = []
 
-    for f in os.listdir(SESSION_DIR):
+    for f in os.listdir(SESSION_DIR.get() or "."):
         if not f.endswith(".meta"):
             continue
 
-        meta_path = os.path.join(SESSION_DIR, f)
+        meta_path = os.path.join(SESSION_DIR.get(), f)
 
         # --- load timestamps from the .meta file ------------------------------
         with open(meta_path, "r", encoding="utf-8") as fp:
