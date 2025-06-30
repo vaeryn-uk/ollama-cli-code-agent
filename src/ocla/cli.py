@@ -1,15 +1,16 @@
 import argparse
-import json
-import os
-import subprocess
 import humanize
 from datetime import datetime
 
-from ollama import Message
+from ollama import Message, Client
 from tzlocal import get_localzone
 
 from rich.table import Table
 
+import logging
+import logging.config
+
+from ocla.util import format_tool_arguments
 from ocla.cli_io import info, console, agent_output, error, interactive_prompt
 from ocla.state import load_state
 from ocla.session import (
@@ -24,11 +25,44 @@ from ocla.tools import ALL, ToolSecurity
 import ollama
 import sys
 
-from ocla.util import truncate
-
 DEFAULT_MODEL = "qwen3"
 DEFAULT_CTX_WINDOW = 8192 * 2
-TOOL_RESULT_TRUNCATE_LENGTH = 88
+
+_LOG_LEVEL = logging.DEBUG
+
+logging.basicConfig(level=_LOG_LEVEL)
+
+# Configure httpx underneath ollama client.
+logging.config.dictConfig({
+    "version": 1,
+    "disable_existing_loggers": False,  # keep everything already configured
+    "formatters": {
+        "http": {
+            "format": "%(levelname)s [%(asctime)s] %(name)s - %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        }
+    },
+    "handlers": {
+        "http": {
+            "class": "logging.StreamHandler",
+            "formatter": "http",
+            "level": _LOG_LEVEL,  # this handler sees all httpx debug
+            "stream": "ext://sys.stderr",
+        },
+    },
+    "loggers": {
+        "httpx": {
+            "handlers": ["http"],
+            "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+        "httpcore": {
+            "handlers": ["http"],
+            "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+})
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
@@ -44,17 +78,18 @@ def execute_tool(call: ollama.Message.ToolCall) -> str:
         except Exception as e:
             err = f"Unknown error"
 
-    info(f"Executed tool '{call.function.name}'")
+    info(f"Executed tool '{call.function.name}' with {format_tool_arguments(call)}")
 
-    if not result and not err:
-        err = f"Unknown error"
+    if result == "" and not err:
+        result = "[[ no output from tool ]]"
+
+    logging.debug(f"Tool result: {result}")
+    logging.debug(f"Tool error: {err}")
 
     if err:
         error(err)
-    else:
-        info(f"Result: {truncate(result, TOOL_RESULT_TRUNCATE_LENGTH).replace('\n', '')}")
 
-    return result
+    return err or result
 
 
 def _confirm_tool(call: ollama.Message.ToolCall) -> bool:

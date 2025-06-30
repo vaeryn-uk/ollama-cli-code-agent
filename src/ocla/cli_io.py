@@ -12,8 +12,11 @@ console = Console()
 _TTY_WIN = "CONIN$"  # Windows console device
 _TTY_NIX = "/dev/tty"  # POSIX console device
 
+
 def agent_output(text: str, thinking: bool, con=None, **kwargs) -> None:
-    (con or console).print(Text(text, style="italic yellow" if thinking else "magenta"), **kwargs)
+    (con or console).print(
+        Text(text, style="italic yellow" if thinking else "magenta"), **kwargs
+    )
 
 
 def user_prompt(text: str, con=None, **kwargs) -> None:
@@ -26,6 +29,7 @@ def info(text: str, con=None, **kwargs) -> None:
 
 def error(text: str, con=None, **kwargs) -> None:
     (con or console).print(Text("ERROR: " + text, style="red"), **kwargs)
+
 
 def interactive_prompt(prompt: str) -> Optional[str]:
     # 1. Fast path – stdin is already a TTY
