@@ -1,7 +1,7 @@
 import io
 from pathlib import Path
 from difflib import unified_diff
-from ocla.cli_io import info, debug
+from ocla.cli_io import info
 from rich.syntax import Syntax
 from rich.console import Console
 from ocla.util import can_access_path
@@ -12,7 +12,7 @@ from . import Tool, ToolSecurity
 
 
 class ListFiles(Tool):
-    """Return a list of file names in the given directory."""
+    """Return a list of files and folders in the given directory."""
 
     security = ToolSecurity.PERMISSIBLE
 

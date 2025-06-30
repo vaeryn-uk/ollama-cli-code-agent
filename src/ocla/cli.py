@@ -2,13 +2,16 @@ import argparse
 import humanize
 from datetime import datetime
 
-from ollama import Message
+from ollama import Message, Client
 from tzlocal import get_localzone
 
 from rich.table import Table
 
+import logging
+import logging.config
+
 from ocla.util import format_tool_arguments
-from ocla.cli_io import info, console, agent_output, error, interactive_prompt, debug
+from ocla.cli_io import info, console, agent_output, error, interactive_prompt
 from ocla.state import load_state
 from ocla.session import (
     Session,
@@ -25,6 +28,36 @@ import sys
 DEFAULT_MODEL = "qwen3"
 DEFAULT_CTX_WINDOW = 8192 * 2
 
+_LOG_LEVEL = logging.ERROR
+
+logging.basicConfig(level=_LOG_LEVEL)
+
+# Configure httpx underneath ollama client.
+logging.config.dictConfig({
+    "version": 1,
+    "disable_existing_loggers": False,  # keep everything already configured
+    "formatters": {
+        "httpx": {
+            "format": "%(levelname)s [%(asctime)s] %(name)s - %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        }
+    },
+    "handlers": {
+        "httpx": {
+            "class": "logging.StreamHandler",
+            "formatter": "httpx",
+            "level": _LOG_LEVEL,  # this handler sees all httpx debug
+            "stream": "ext://sys.stderr",
+        },
+    },
+    "loggers": {
+        "httpx": {
+            "handlers": ["httpx"],
+            "level": _LOG_LEVEL,
+            "propagate": False,  # avoid double printing via root
+        },
+    }
+})
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
@@ -45,8 +78,8 @@ def execute_tool(call: ollama.Message.ToolCall) -> str:
     if result == "" and not err:
         result = "[[ no output from tool ]]"
 
-    debug(f"Tool result: {result}")
-    debug(f"Tool error: {err}")
+    logging.debug(f"Tool result: {result}")
+    logging.debug(f"Tool error: {err}")
 
     if err:
         error(err)
