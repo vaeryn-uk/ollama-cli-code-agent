@@ -6,6 +6,7 @@ from typing import Optional, Callable
 
 _have_logged_invalid_config = False
 
+
 @dataclasses.dataclass
 class ConfigVar:
     name: str
@@ -132,7 +133,7 @@ TOOL_PERMISSION_MODE_ALWAYS_ALLOW = "ALWAYS_ALLOW"
 VALID_TOOL_PERMISSION_MODES = [
     TOOL_PERMISSION_MODE_DEFAULT,
     TOOL_PERMISSION_MODE_ALWAYS_ASK,
-    TOOL_PERMISSION_MODE_ALWAYS_ALLOW
+    TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
 ]
 
 TOOL_PERMISSION_MODE = _var(
@@ -145,8 +146,8 @@ TOOL_PERMISSION_MODE = _var(
         allowed_values={
             TOOL_PERMISSION_MODE_DEFAULT: "Default: ask for permission for non-trivial tools",
             TOOL_PERMISSION_MODE_ALWAYS_ASK: "Always ask for permission for all tools",
-            TOOL_PERMISSION_MODE_ALWAYS_ALLOW: "Always run any tool; use with caution"
-        }
+            TOOL_PERMISSION_MODE_ALWAYS_ALLOW: "Always run any tool; use with caution",
+        },
     )
 )
 
@@ -157,6 +158,9 @@ DISPLAY_THINKING = _var(
         env="OCLA_DISPLAY_THINKING",
         config_file_property="displayThinking",
         default="True",
-        allowed_values={"True": "Display thinking output", "False": "Do not display thinking output"},
+        allowed_values={
+            "True": "Display thinking output",
+            "False": "Do not display thinking output",
+        },
     )
 )

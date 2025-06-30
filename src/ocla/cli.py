@@ -18,7 +18,9 @@ from ocla.config import (
     LOG_LEVEL,
     CONFIG_VARS,
     TOOL_PERMISSION_MODE,
-    DISPLAY_THINKING, TOOL_PERMISSION_MODE_DEFAULT, TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
+    DISPLAY_THINKING,
+    TOOL_PERMISSION_MODE_DEFAULT,
+    TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
 )
 from ocla.session import (
     Session,
@@ -113,10 +115,15 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     mode = TOOL_PERMISSION_MODE.get()
 
     if mode == TOOL_PERMISSION_MODE_ALWAYS_ALLOW:
-        info(f"Automatically allowing use of tool '{fn}' ({TOOL_PERMISSION_MODE_ALWAYS_ALLOW} mode)")
+        info(
+            f"Automatically allowing use of tool '{fn}' ({TOOL_PERMISSION_MODE_ALWAYS_ALLOW} mode)"
+        )
         return True
 
-    if mode == TOOL_PERMISSION_MODE_DEFAULT and tool.security == ToolSecurity.PERMISSIBLE:
+    if (
+        mode == TOOL_PERMISSION_MODE_DEFAULT
+        and tool.security == ToolSecurity.PERMISSIBLE
+    ):
         info(f"Automatically allowing use of tool '{fn}'")
         return True
 
@@ -232,7 +239,8 @@ def main(argv=None):
         description="Interact with a local Ollama model",
     )
     parser.add_argument(
-        "-n", "--new-session",
+        "-n",
+        "--new-session",
         help="Generate a new session and run in it. This will be made the active session for future commands",
         action="store_true",
     )
@@ -308,7 +316,13 @@ def main(argv=None):
                 var.config_file_property or "",
                 var.default or "",
                 var.get() or "",
-                "\n".join([x[0] + ": " + x[1] for x in list(var.allowed_values.items())]) if var.allowed_values else "",
+                (
+                    "\n".join(
+                        [x[0] + ": " + x[1] for x in list(var.allowed_values.items())]
+                    )
+                    if var.allowed_values
+                    else ""
+                ),
             )
 
         console.print(table)
