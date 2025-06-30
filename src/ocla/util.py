@@ -41,7 +41,7 @@ def can_access_path(path: Path | str, *, for_write: bool = False) -> bool:
     try:
         original = Path(path).expanduser()
         resolved = (original if original.is_absolute() else cwd / original).resolve()
-    except OSError:          # bad symlink or permission error while resolving
+    except OSError:  # bad symlink or permission error while resolving
         return False
 
     # 1. Must live under cwd
@@ -52,5 +52,5 @@ def can_access_path(path: Path | str, *, for_write: bool = False) -> bool:
     if any(part.startswith(".") and part not in (".", "..") for part in original.parts):
         return False
 
-    # 3. If reading, the final target must exist
-    return for_write or resolved.exists()
+    # 3. Ignore existence so long as path stays within cwd
+    return True

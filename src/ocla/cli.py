@@ -12,7 +12,7 @@ import logging.config
 
 from ocla.util import format_tool_arguments
 from ocla.cli_io import info, console, agent_output, error, interactive_prompt
-from ocla.state import load_state
+from ocla.config import CONTEXT_WINDOW, MODEL, LOG_LEVEL, CONFIG_VARS
 from ocla.session import (
     Session,
     list_sessions,
@@ -25,44 +25,46 @@ from ocla.tools import ALL, ToolSecurity
 import ollama
 import sys
 
-DEFAULT_MODEL = "qwen3"
-DEFAULT_CTX_WINDOW = 8192 * 2
+_LOG_LEVEL = LOG_LEVEL.get()
 
-_LOG_LEVEL = logging.DEBUG
+# Skip application if we don't have a valid log level; we'll error out later in the CLI.
+if LOG_LEVEL.validator_fn(LOG_LEVEL.get()) == "":
+    logging.basicConfig(level=_LOG_LEVEL)
 
-logging.basicConfig(level=_LOG_LEVEL)
-
-# Configure httpx underneath ollama client.
-logging.config.dictConfig({
-    "version": 1,
-    "disable_existing_loggers": False,  # keep everything already configured
-    "formatters": {
-        "http": {
-            "format": "%(levelname)s [%(asctime)s] %(name)s - %(message)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S",
+    # Configure httpx underneath ollama client.
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,  # keep everything already configured
+            "formatters": {
+                "http": {
+                    "format": "%(levelname)s [%(asctime)s] %(name)s - %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                }
+            },
+            "handlers": {
+                "http": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "http",
+                    "level": _LOG_LEVEL,  # this handler sees all httpx debug
+                    "stream": "ext://sys.stderr",
+                },
+            },
+            "loggers": {
+                "httpx": {
+                    "handlers": ["http"],
+                    "level": _LOG_LEVEL,
+                    "propagate": False,
+                },
+                "httpcore": {
+                    "handlers": ["http"],
+                    "level": _LOG_LEVEL,
+                    "propagate": False,
+                },
+            },
         }
-    },
-    "handlers": {
-        "http": {
-            "class": "logging.StreamHandler",
-            "formatter": "http",
-            "level": _LOG_LEVEL,  # this handler sees all httpx debug
-            "stream": "ext://sys.stderr",
-        },
-    },
-    "loggers": {
-        "httpx": {
-            "handlers": ["http"],
-            "level": _LOG_LEVEL,
-            "propagate": False,
-        },
-        "httpcore": {
-            "handlers": ["http"],
-            "level": _LOG_LEVEL,
-            "propagate": False,
-        },
-    },
-})
+    )
+
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
@@ -128,7 +130,7 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
     thinking = False
 
     for chunk in ollama.chat(
-        stream=True, options={"num_ctx": DEFAULT_CTX_WINDOW}, **kwargs
+        stream=True, options={"num_ctx": int(CONTEXT_WINDOW.get())}, **kwargs
     ):
         msg = chunk.get("message", {})
         last_role = msg.get("role", last_role)
@@ -167,7 +169,7 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
 
 def do_chat(session: Session, prompt: str) -> str:
     session.add({"role": "user", "content": prompt})
-    model = load_state().default_model or DEFAULT_MODEL
+    model = MODEL.get()
 
     accumulated_text: list[str] = []
 
@@ -234,10 +236,17 @@ def main(argv=None):
     session_set = session_sub.add_parser("set", help="Set current session")
     session_set.add_argument("name")
 
+    session_parser = subparsers.add_parser("config", help="Show config")
+
     args, prompt_parts = parser.parse_known_args(argv)
 
     if args.new_session and args.session:
         parser.error("Cannot specify both --new-session and --session.")
+
+    for var in CONFIG_VARS.values():
+        if var.validator_fn:
+            if validation_err := var.validator_fn(var.get()):
+                parser.error(f"Invalid value for {var.name}: {validation_err}")
 
     if args.command == "session":
         if args.session_cmd == "new":
@@ -272,6 +281,28 @@ def main(argv=None):
             set_current_session_name(args.name)
         else:
             session_parser.print_help()
+        return
+    elif args.command == "config":
+        table = Table(title="Available Configuration Variables")
+
+        table.add_column("Name", style="cyan", no_wrap=True)
+        table.add_column("Description", style="")
+        table.add_column("Env Var", style="magenta")
+        table.add_column("Config Key", style="yellow")
+        table.add_column("Default", style="dim")
+        table.add_column("Current Value", style="green")
+
+        for var in CONFIG_VARS.values():
+            table.add_row(
+                var.name,
+                var.description,
+                var.env or "",
+                var.config_file_property or "",
+                var.default or "",
+                var.get() or "",
+            )
+
+        console.print(table)
         return
 
     session_name = args.session or get_current_session_name() or generate_session_name()
