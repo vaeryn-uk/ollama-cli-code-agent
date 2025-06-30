@@ -30,58 +30,77 @@ class ConfigVar:
 
         return self.default
 
+
 CONFIG_VARS: dict[str, ConfigVar] = {}
+
 
 def _var(var: ConfigVar) -> ConfigVar:
     CONFIG_VARS[var.name] = var
     return var
 
-CONFIG_FILE = _var(ConfigVar(
-    name="config_file",
-    description="Path to the config file",
-    env="OCLA_CONFIG_FILE",
-    config_file_property=None,
-    default=os.path.join(".", ".ocla", "config.json"),
-))
 
-CONTEXT_WINDOW = _var(ConfigVar(
-    name="context_window",
-    description="Context window size in tokens",
-    env="OCLA_CONTEXT_WINDOW",
-    config_file_property="contextWindow",
-    default=str(8192 * 2),
-    validator_fn=lambda x: "" if x.isdigit() else "must be a positive integer",
-))
+CONFIG_FILE = _var(
+    ConfigVar(
+        name="config_file",
+        description="Path to the config file",
+        env="OCLA_CONFIG_FILE",
+        config_file_property=None,
+        default=os.path.join(".", ".ocla", "config.json"),
+    )
+)
 
-MODEL = _var(ConfigVar(
-    name="model",
-    description="Model name",
-    env="OCLA_MODEL",
-    config_file_property="model",
-    default="qwen3",
-))
+CONTEXT_WINDOW = _var(
+    ConfigVar(
+        name="context_window",
+        description="Context window size in tokens",
+        env="OCLA_CONTEXT_WINDOW",
+        config_file_property="contextWindow",
+        default=str(8192 * 2),
+        validator_fn=lambda x: "" if x.isdigit() else "must be a positive integer",
+    )
+)
 
-LOG_LEVEL = _var(ConfigVar(
-    name="log_level",
-    description="Log level",
-    env="OCLA_LOG_LEVEL",
-    config_file_property="logLevel",
-    default="WARNING",
-    validator_fn=lambda x: "" if x in logging.getLevelNamesMapping().keys() else "must be one of: " + str(logging.getLevelNamesMapping().keys()),
-))
+MODEL = _var(
+    ConfigVar(
+        name="model",
+        description="Model name",
+        env="OCLA_MODEL",
+        config_file_property="model",
+        default="qwen3",
+    )
+)
 
-SESSION_DIR = _var(ConfigVar(
-    name="session_dir",
-    description="Path to the session directory",
-    env="OCLA_SESSION_DIR",
-    config_file_property="sessionDir",
-    default=os.path.join(".", ".ocla", "sessions"),
-))
+LOG_LEVEL = _var(
+    ConfigVar(
+        name="log_level",
+        description="Log level",
+        env="OCLA_LOG_LEVEL",
+        config_file_property="logLevel",
+        default="WARNING",
+        validator_fn=lambda x: (
+            ""
+            if x in logging.getLevelNamesMapping().keys()
+            else "must be one of: " + str(logging.getLevelNamesMapping().keys())
+        ),
+    )
+)
 
-STATE_FILE = _var(ConfigVar(
-    name="state_file",
-    description="Path to the state file",
-    env="OCLA_STATE_FILE",
-    config_file_property="stateFile",
-    default=os.path.join(".", ".ocla", "state.json"),
-))
+SESSION_DIR = _var(
+    ConfigVar(
+        name="session_dir",
+        description="Path to the session directory",
+        env="OCLA_SESSION_DIR",
+        config_file_property="sessionDir",
+        default=os.path.join(".", ".ocla", "sessions"),
+    )
+)
+
+STATE_FILE = _var(
+    ConfigVar(
+        name="state_file",
+        description="Path to the state file",
+        env="OCLA_STATE_FILE",
+        config_file_property="stateFile",
+        default=os.path.join(".", ".ocla", "state.json"),
+    )
+)

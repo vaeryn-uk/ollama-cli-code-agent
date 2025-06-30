@@ -4,6 +4,7 @@ import dataclasses
 import json
 from .config import STATE_FILE
 
+
 @dataclasses.dataclass
 class State:
     current_session: Optional[str] = None

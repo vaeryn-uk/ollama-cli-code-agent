@@ -246,9 +246,7 @@ def main(argv=None):
     for var in CONFIG_VARS.values():
         if var.validator_fn:
             if validation_err := var.validator_fn(var.get()):
-                parser.error(
-                    f"Invalid value for {var.name}: {validation_err}"
-                )
+                parser.error(f"Invalid value for {var.name}: {validation_err}")
 
     if args.command == "session":
         if args.session_cmd == "new":
