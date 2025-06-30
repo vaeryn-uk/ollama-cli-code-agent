@@ -43,10 +43,14 @@ class Tool(abc.ABC):
 # Import concrete tool implementations after defining the base class to avoid
 # circular imports.
 from .file_system import ListFiles, ReadFile, WriteFile
+from .git import GitShowChanges, GitCommit, GitLog
 
 
 ALL: dict[str, Tool] = {
     "list_files": ListFiles(),
     "read_file": ReadFile(),
     "write_file": WriteFile(),
+    "git_show_changes": GitShowChanges(),
+    "git_commit": GitCommit(),
+    "git_log": GitLog(),
 }
