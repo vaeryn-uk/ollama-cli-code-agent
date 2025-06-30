@@ -1,7 +1,7 @@
 import io
 from pathlib import Path
 from difflib import unified_diff
-from ocla.cli_io import info
+from ocla.cli_io import info, debug
 from rich.syntax import Syntax
 from rich.console import Console
 from ocla.util import can_access_path
@@ -16,14 +16,24 @@ class ListFiles(Tool):
 
     security = ToolSecurity.PERMISSIBLE
 
-    def execute(self, path: str = ".") -> (list[str], str):
+    def execute(self, path: str = ".", recursive: bool = False) -> (list[str], str):
         root = Path(path)
         if not can_access_path(root):
-            return [], f"Access denied: {path}"
+            return [], f"OCLA cannot access: {path}"
         if not root.is_dir():
-            raise NotADirectoryError(path)
-        # non-recursive: names only, no sub-dirs
-        return sorted(p.name for p in root.iterdir() if p.is_file()), ""
+            return [], f"{path} is not a directory"
+
+        try:
+            entries = []
+            paths = root.rglob("*") if recursive else root.iterdir()
+            for p in paths:
+                if can_access_path(p):
+                    entries.append(
+                        p.relative_to(root).as_posix() if recursive else p.name
+                    )
+            return sorted(entries), ""
+        except PermissionError as e:
+            return [], f"Access denied while scanning: {e}"
 
 
 class ReadFile(Tool):
@@ -34,10 +44,10 @@ class ReadFile(Tool):
     def execute(self, path: str = ".", encoding: str = "utf-8") -> (str, str):
         file_path = Path(path)
         if not can_access_path(file_path):
-            return "", f"Access denied: {path}"
+            return "", f"OCLA cannot access: {path}"
         if not file_path.is_file():
             return "", f"File not found: {path}"
-        return file_path.read_text(encoding=encoding), ""
+        return file_path.read_text(encoding=encoding) or "this file has no content", ""
 
 
 class WriteFile(Tool):
@@ -47,8 +57,8 @@ class WriteFile(Tool):
         self, path: str, new_content: str, encoding: str = "utf-8"
     ) -> (str, str):
         file_path = Path(path)
-        if not can_access_path(file_path, forwrite=True):
-            return "", f"Access denied: {path}"
+        if not can_access_path(file_path, for_write=True):
+            return "", f"OCLA cannot access: {path}"
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(new_content, encoding=encoding)
         return f"written {len(new_content)} bytes to {path}", ""
@@ -64,7 +74,7 @@ class WriteFile(Tool):
         encoding = args.get("encoding", "utf-8")
         file_path = Path(path)
 
-        if not can_access_path(file_path, forwrite=True):
+        if not can_access_path(file_path, for_write=True):
             return f"Access denied: {path}"
 
         # Load existing content (empty if the file does not yet exist)

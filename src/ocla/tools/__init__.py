@@ -5,7 +5,7 @@ import json
 import typing
 from ollama import Message
 
-from ..util import pascal_to_snake
+from ..util import pascal_to_snake, format_tool_arguments, truncate
 
 
 class ToolSecurity(enum.Enum):
@@ -33,16 +33,7 @@ class Tool(abc.ABC):
         """Execute the tool."""
 
     def prompt(self, call: Message.ToolCall, yes_no: str) -> str:
-        raw_args = call.function.arguments
-        try:
-            if isinstance(raw_args, (dict, list)):
-                args = json.dumps(raw_args, separators=(",", ":"))
-            else:
-                args = str(raw_args)
-        except TypeError:
-            args = str(raw_args)
-
-        return f"Run tool '{self.name}'? Arguments: {args} {yes_no}"
+        return f"Run tool '{self.name}'? Arguments: {truncate(format_tool_arguments(call), 50)} {yes_no}"
 
     def __call__(self, *args, **kwargs):
         """Allow tools to be passed directly to Ollama."""

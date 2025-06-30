@@ -31,6 +31,10 @@ def error(text: str, con=None, **kwargs) -> None:
     (con or console).print(Text("ERROR: " + text, style="red"), **kwargs)
 
 
+def debug(text: str, con=None, **kwargs) -> None:
+    (con or console).print(Text("DEBUG: " + text, style="grey50"), **kwargs)
+
+
 def interactive_prompt(prompt: str) -> Optional[str]:
     # 1. Fast path – stdin is already a TTY
     if sys.stdin.isatty():

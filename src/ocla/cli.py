@@ -1,7 +1,4 @@
 import argparse
-import json
-import os
-import subprocess
 import humanize
 from datetime import datetime
 
@@ -10,7 +7,8 @@ from tzlocal import get_localzone
 
 from rich.table import Table
 
-from ocla.cli_io import info, console, agent_output, error, interactive_prompt
+from ocla.util import format_tool_arguments
+from ocla.cli_io import info, console, agent_output, error, interactive_prompt, debug
 from ocla.state import load_state
 from ocla.session import (
     Session,
@@ -24,11 +22,8 @@ from ocla.tools import ALL, ToolSecurity
 import ollama
 import sys
 
-from ocla.util import truncate
-
 DEFAULT_MODEL = "qwen3"
 DEFAULT_CTX_WINDOW = 8192 * 2
-TOOL_RESULT_TRUNCATE_LENGTH = 88
 
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
@@ -45,19 +40,18 @@ def execute_tool(call: ollama.Message.ToolCall) -> str:
         except Exception as e:
             err = f"Unknown error"
 
-    info(f"Executed tool '{call.function.name}'")
+    info(f"Executed tool '{call.function.name}' with {format_tool_arguments(call)}")
 
-    if not result and not err:
-        err = f"Unknown error"
+    if result == "" and not err:
+        result = "[[ no output from tool ]]"
+
+    debug(f"Tool result: {result}")
+    debug(f"Tool error: {err}")
 
     if err:
         error(err)
-    else:
-        info(
-            f"Result: {truncate(result, TOOL_RESULT_TRUNCATE_LENGTH).replace('\n', '')}"
-        )
 
-    return result
+    return err or result
 
 
 def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
