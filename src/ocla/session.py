@@ -1,12 +1,14 @@
 import json
+import logging
 import os
 import time
 from datetime import timezone
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
-from .config import SESSION_DIR
+from .config import SESSION_DIR, PROJECT_CONTEXT_FILE
 
 from datetime import datetime
+from pathlib import Path
 
 import ollama
 from ocla.state import load_state, save_state
@@ -51,6 +53,15 @@ class Session:
 
         if len(self.messages) == 0:
             self.add({"role": "system", "content": DEFAULT_SYSTEM_PROMPT})
+
+            try:
+                content = Path(PROJECT_CONTEXT_FILE.get()).read_text()
+                if content:
+                    self.add({"role": "system", "content": f"Additional project context:\n{content}"})
+                else:
+                    logging.debug(f"project context file {PROJECT_CONTEXT_FILE.get()} was empty")
+            except Exception as e:
+                logging.debug(f"project context file {PROJECT_CONTEXT_FILE.get()} could not be read")
 
     def _write_meta(self) -> None:
         os.makedirs(SESSION_DIR.get(), exist_ok=True)
