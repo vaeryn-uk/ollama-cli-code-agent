@@ -35,7 +35,7 @@ import sys
 _LOG_LEVEL = LOG_LEVEL.get()
 
 # Skip application if we don't have a valid log level; we'll error out later in the CLI.
-if LOG_LEVEL.validator_fn(LOG_LEVEL.get()) == "":
+if LOG_LEVEL.is_valid():
     logging.basicConfig(level=_LOG_LEVEL)
 
     # Configure httpx underneath ollama client.
@@ -256,9 +256,8 @@ def main(argv=None):
         parser.error("Cannot specify both --new-session and --session.")
 
     for var in CONFIG_VARS.values():
-        if var.validator_fn:
-            if validation_err := var.validator_fn(var.get()):
-                parser.error(f"Invalid value for {var.name}: {validation_err}")
+        if validation_err := var.validate():
+            parser.error(f"Invalid value for {var.name}: {validation_err}")
 
     if args.command == "session":
         if args.session_cmd == "new":
@@ -303,6 +302,7 @@ def main(argv=None):
         table.add_column("Config Key", style="yellow")
         table.add_column("Default", style="dim")
         table.add_column("Current Value", style="green")
+        table.add_column("Allowed values", style="")
 
         for var in CONFIG_VARS.values():
             table.add_row(
@@ -312,6 +312,7 @@ def main(argv=None):
                 var.config_file_property or "",
                 var.default or "",
                 var.get() or "",
+                "\n".join([x[0] + ": " + x[1] for x in list(var.allowed_values.items())]) if var.allowed_values else "",
             )
 
         console.print(table)

@@ -5,9 +5,6 @@ import json
 from typing import Optional, Callable
 
 
-VALID_TOOL_PERMISSION_MODES = {"DEFAULT", "ASK_ALL", "ALLOW_ALLOW"}
-
-
 @dataclasses.dataclass
 class ConfigVar:
     name: str
@@ -16,6 +13,7 @@ class ConfigVar:
     config_file_property: Optional[str] = None
     default: Optional[str] = None
     validator_fn: Optional[Callable[[Optional[str]], str]] = None
+    allowed_values: Optional[dict[str, str]] = None
 
     def get(self) -> str:
         if self.env and os.environ.get(self.env):
@@ -32,6 +30,19 @@ class ConfigVar:
                 pass
 
         return self.default
+
+    def validate(self) -> Optional[str]:
+        if self.validator_fn:
+            return self.validator_fn(self.get())
+
+        if self.allowed_values:
+            if self.get() not in self.allowed_values.keys():
+                return f"must be one of: {', '.join(self.allowed_values.keys())}"
+
+        return None
+
+    def is_valid(self) -> bool:
+        return self.validate() is None
 
 
 CONFIG_VARS: dict[str, ConfigVar] = {}
@@ -80,11 +91,13 @@ LOG_LEVEL = _var(
         env="OCLA_LOG_LEVEL",
         config_file_property="logLevel",
         default="WARNING",
-        validator_fn=lambda x: (
-            ""
-            if x in logging.getLevelNamesMapping().keys()
-            else "must be one of: " + str(logging.getLevelNamesMapping().keys())
-        ),
+        allowed_values={
+            "CRITICAL": "Critical",
+            "ERROR": "Error",
+            "WARNING": "Warning",
+            "INFO": "Info",
+            "DEBUG": "Debug",
+        },
     )
 )
 
@@ -108,18 +121,27 @@ STATE_FILE = _var(
     )
 )
 
+VALID_TOOL_PERMISSION_MODE_DEFAULT = "DEFAULT"
+VALID_TOOL_PERMISSION_MODE_ALWAYS_ASK = "ALWAYS_ASK"
+VALID_TOOL_PERMISSION_MODE_ALWAYS_ALLOW = "ALWAYS_ALLOW"
+VALID_TOOL_PERMISSION_MODES = [
+    VALID_TOOL_PERMISSION_MODE_DEFAULT,
+    VALID_TOOL_PERMISSION_MODE_ALWAYS_ASK,
+    VALID_TOOL_PERMISSION_MODE_ALWAYS_ALLOW
+]
+
 TOOL_PERMISSION_MODE = _var(
     ConfigVar(
         name="tool_permission_mode",
         description="How tools request permission to run",
         env="OCLA_TOOL_PERMISSION_MODE",
         config_file_property="toolPermissionMode",
-        default="DEFAULT",
-        validator_fn=lambda x: (
-            ""
-            if x in VALID_TOOL_PERMISSION_MODES
-            else "must be one of: " + str(VALID_TOOL_PERMISSION_MODES)
-        ),
+        default=VALID_TOOL_PERMISSION_MODE_DEFAULT,
+        allowed_values={
+            VALID_TOOL_PERMISSION_MODE_DEFAULT: "Default: ask for permission for non-trivial tools",
+            VALID_TOOL_PERMISSION_MODE_ALWAYS_ASK: "Always ask for permission for all tools",
+            VALID_TOOL_PERMISSION_MODE_ALWAYS_ALLOW: "Always run any tool; use with caution"
+        }
     )
 )
 
@@ -130,8 +152,6 @@ DISPLAY_THINKING = _var(
         env="OCLA_DISPLAY_THINKING",
         config_file_property="displayThinking",
         default="True",
-        validator_fn=lambda x: (
-            "" if str(x).lower() in {"true", "false"} else "must be 'True' or 'False'"
-        ),
+        allowed_values={"True": "Display thinking output", "False": "Do not display thinking output"},
     )
 )
