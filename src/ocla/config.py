@@ -164,3 +164,13 @@ DISPLAY_THINKING = _var(
         },
     )
 )
+
+PROJECT_CONTEXT_FILE = _var(
+    ConfigVar(
+        name="project_context_file",
+        description="the relative path to a file that gives ocla more context about your project (case-insensitive)",
+        env="OCLA_PROJECT_CONTEXT_FILE",
+        config_file_property="projectContextFiles",
+        default="AGENTS.md",
+    )
+)
