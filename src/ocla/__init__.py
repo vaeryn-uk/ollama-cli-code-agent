@@ -6,3 +6,4 @@ from .session import Session
 from .cli import do_chat
 from .tools import *
 from .state import State, load_state, save_state
+from .config import Config, load_config, save_config

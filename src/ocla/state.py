@@ -9,9 +9,6 @@ STATE_FILE = os.path.join(".ocla", "state.json")
 @dataclasses.dataclass
 class State:
     current_session: Optional[str] = None
-    default_model: Optional[str] = ""
-
-    # TODO Resolve value from env, state prop or default value.
 
 
 def load_state() -> State:

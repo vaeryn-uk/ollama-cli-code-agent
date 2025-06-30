@@ -12,7 +12,7 @@ import logging.config
 
 from ocla.util import format_tool_arguments
 from ocla.cli_io import info, console, agent_output, error, interactive_prompt
-from ocla.state import load_state
+from ocla.config import load_config
 from ocla.session import (
     Session,
     list_sessions,
@@ -25,44 +25,47 @@ from ocla.tools import ALL, ToolSecurity
 import ollama
 import sys
 
-DEFAULT_MODEL = "qwen3"
-DEFAULT_CTX_WINDOW = 8192 * 2
-
-_LOG_LEVEL = logging.DEBUG
+CFG = load_config()
+DEFAULT_MODEL = CFG.model
+DEFAULT_CTX_WINDOW = CFG.context_window
+_LOG_LEVEL = getattr(logging, CFG.log_level.upper(), logging.DEBUG)
 
 logging.basicConfig(level=_LOG_LEVEL)
 
 # Configure httpx underneath ollama client.
-logging.config.dictConfig({
-    "version": 1,
-    "disable_existing_loggers": False,  # keep everything already configured
-    "formatters": {
-        "http": {
-            "format": "%(levelname)s [%(asctime)s] %(name)s - %(message)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-        }
-    },
-    "handlers": {
-        "http": {
-            "class": "logging.StreamHandler",
-            "formatter": "http",
-            "level": _LOG_LEVEL,  # this handler sees all httpx debug
-            "stream": "ext://sys.stderr",
+logging.config.dictConfig(
+    {
+        "version": 1,
+        "disable_existing_loggers": False,  # keep everything already configured
+        "formatters": {
+            "http": {
+                "format": "%(levelname)s [%(asctime)s] %(name)s - %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            }
         },
-    },
-    "loggers": {
-        "httpx": {
-            "handlers": ["http"],
-            "level": _LOG_LEVEL,
-            "propagate": False,
+        "handlers": {
+            "http": {
+                "class": "logging.StreamHandler",
+                "formatter": "http",
+                "level": _LOG_LEVEL,  # this handler sees all httpx debug
+                "stream": "ext://sys.stderr",
+            },
         },
-        "httpcore": {
-            "handlers": ["http"],
-            "level": _LOG_LEVEL,
-            "propagate": False,
+        "loggers": {
+            "httpx": {
+                "handlers": ["http"],
+                "level": _LOG_LEVEL,
+                "propagate": False,
+            },
+            "httpcore": {
+                "handlers": ["http"],
+                "level": _LOG_LEVEL,
+                "propagate": False,
+            },
         },
-    },
-})
+    }
+)
+
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
@@ -167,7 +170,7 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
 
 def do_chat(session: Session, prompt: str) -> str:
     session.add({"role": "user", "content": prompt})
-    model = load_state().default_model or DEFAULT_MODEL
+    model = DEFAULT_MODEL
 
     accumulated_text: list[str] = []
 
