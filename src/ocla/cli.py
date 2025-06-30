@@ -12,7 +12,14 @@ import logging.config
 
 from ocla.util import format_tool_arguments
 from ocla.cli_io import info, console, agent_output, error, interactive_prompt
-from ocla.config import CONTEXT_WINDOW, MODEL, LOG_LEVEL, CONFIG_VARS
+from ocla.config import (
+    CONTEXT_WINDOW,
+    MODEL,
+    LOG_LEVEL,
+    CONFIG_VARS,
+    TOOL_PERMISSION_MODE,
+    DISPLAY_THINKING,
+)
 from ocla.session import (
     Session,
     list_sessions,
@@ -95,9 +102,7 @@ def execute_tool(call: ollama.Message.ToolCall) -> str:
 
 
 def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
-    """
-    Ask the user whether to run this tool call.
-    """
+    """Ask the user whether to run this tool call respecting config."""
     fn = call.function.name
 
     tool = ALL.get(call.function.name)
@@ -105,7 +110,13 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
         error(f"Unknown tool: {fn}")
         return False
 
-    if tool.security == ToolSecurity.PERMISSIBLE:
+    mode = TOOL_PERMISSION_MODE.get()
+
+    if mode == "ALLOW_ALLOW":
+        info(f"Automatically allowing use of tool '{fn}' (ALLOW_ALLOW mode)")
+        return True
+
+    if mode == "DEFAULT" and tool.security == ToolSecurity.PERMISSIBLE:
         info(f"Automatically allowing use of tool '{fn}'")
         return True
 
@@ -128,6 +139,7 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
     last_role: str | None = None  # keep whatever role we see last
 
     thinking = False
+    show_thinking = DISPLAY_THINKING.get().lower() != "false"
 
     for chunk in ollama.chat(
         stream=True, options={"num_ctx": int(CONTEXT_WINDOW.get())}, **kwargs
@@ -149,7 +161,7 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
                 thinking = False
                 output = False
 
-            if output:
+            if output and (show_thinking or not thinking):
                 agent_output(part, thinking=thinking, end="")
 
         if "tool_calls" in msg:

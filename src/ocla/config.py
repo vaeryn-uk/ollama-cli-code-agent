@@ -5,6 +5,9 @@ import json
 from typing import Optional, Callable
 
 
+VALID_TOOL_PERMISSION_MODES = {"DEFAULT", "ASK_ALL", "ALLOW_ALLOW"}
+
+
 @dataclasses.dataclass
 class ConfigVar:
     name: str
@@ -102,5 +105,33 @@ STATE_FILE = _var(
         env="OCLA_STATE_FILE",
         config_file_property="stateFile",
         default=os.path.join(".", ".ocla", "state.json"),
+    )
+)
+
+TOOL_PERMISSION_MODE = _var(
+    ConfigVar(
+        name="tool_permission_mode",
+        description="How tools request permission to run",
+        env="OCLA_TOOL_PERMISSION_MODE",
+        config_file_property="toolPermissionMode",
+        default="DEFAULT",
+        validator_fn=lambda x: (
+            ""
+            if x in VALID_TOOL_PERMISSION_MODES
+            else "must be one of: " + str(VALID_TOOL_PERMISSION_MODES)
+        ),
+    )
+)
+
+DISPLAY_THINKING = _var(
+    ConfigVar(
+        name="display_thinking",
+        description="Display assistant thinking output",
+        env="OCLA_DISPLAY_THINKING",
+        config_file_property="displayThinking",
+        default="True",
+        validator_fn=lambda x: (
+            "" if str(x).lower() in {"true", "false"} else "must be 'True' or 'False'"
+        ),
     )
 )
