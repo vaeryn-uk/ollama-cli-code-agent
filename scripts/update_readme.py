@@ -17,13 +17,13 @@ END_MARKER = "<!-- CONFIG_TABLE_END -->"
 
 
 def generate_table() -> str:
-    header = "| Name | Env | Property | Default | Description |"
+    header = "| Name | Env | Config file | Default | Description |"
     sep = "| --- | --- | --- | --- | --- |"
     rows = []
     for name, var in sorted(config.CONFIG_VARS.items()):
-        env = var.env or ""
-        prop = var.config_file_property or ""
-        default = var.default or ""
+        env = var.env or "N/A"
+        prop = var.config_file_property or "N/A"
+        default = var.default or "N/A"
         desc = var.description
         if var.allowed_values:
             allowed = ", ".join(f"{k}: {v}" for k, v in var.allowed_values.items())

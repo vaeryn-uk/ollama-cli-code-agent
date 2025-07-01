@@ -7,9 +7,9 @@ your terminal.
 ## Configuration
 
 <!-- CONFIG_TABLE_START -->
-| Name | Env | Property | Default | Description |
+| Name | Env | Config file | Default | Description |
 | --- | --- | --- | --- | --- |
-| `config_file` | `OCLA_CONFIG_FILE` | `` | `./.ocla/config.json` | Path to the config file |
+| `config_file` | `OCLA_CONFIG_FILE` | `N/A` | `./.ocla/config.json` | Path to the config file |
 | `context_window` | `OCLA_CONTEXT_WINDOW` | `contextWindow` | `16384` | Context window size in tokens |
 | `display_thinking` | `OCLA_DISPLAY_THINKING` | `displayThinking` | `True` | Display assistant thinking output (True: Display thinking output, False: Do not display thinking output) |
 | `log_level` | `OCLA_LOG_LEVEL` | `logLevel` | `WARNING` | Log level (CRITICAL: Critical, ERROR: Error, WARNING: Warning, INFO: Info, DEBUG: Debug) |
