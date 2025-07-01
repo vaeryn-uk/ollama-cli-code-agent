@@ -30,7 +30,7 @@ from ocla.session import (
     set_current_session_name,
     get_current_session_name,
     generate_session_name,
-    session_exists, ContextWindowExceededError,
+    session_exists, ContextWindowExceededError, load_session_meta,
 )
 from ocla.tools import ALL, ToolSecurity
 import ollama
@@ -244,7 +244,10 @@ def do_chat(session: Session, prompt: str) -> str:
             )
 
     session.save()
-    info("session ")
+    info("")
+
+    info(f"session context usage {load_session_meta(session.name).usage_pct()}")
+
     return "".join(accumulated_text)
 
 
@@ -276,6 +279,7 @@ def main(argv=None):
     session_set.add_argument("name")
 
     subparsers.add_parser("config", help="Show config information")
+    subparsers.add_parser("model", help="Show model information")
 
     args, prompt_parts = parser.parse_known_args(argv)
 
@@ -364,6 +368,18 @@ def main(argv=None):
                     else ""
                 ),
             )
+
+        console.print(table)
+        return
+    elif args.command == "model":
+        table = Table(title="Model info", show_header=False)
+
+        table.add_column("key")
+        table.add_column("value")
+
+        table.add_row("Name", MODEL.get())
+        table.add_row("Context window (model max)", str(_model_context_limit(MODEL.get())) or "N/A")
+        table.add_row("Context window (configured)", f"{CONTEXT_WINDOW.get()}")
 
         console.print(table)
         return

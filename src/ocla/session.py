@@ -215,6 +215,28 @@ class SessionInfo:
         return f"{pct * 100:.0f}%"
 
 
+def load_session_meta(name: str) -> SessionInfo | None:
+    _ensure_dirs()
+
+    meta_path = os.path.join(SESSION_DIR.get(), name + ".meta")
+
+    # --- load timestamps from the .meta file ------------------------------
+    with open(meta_path, "r", encoding="utf-8") as fp:
+        meta = json.load(fp)
+    tokens = int(meta.get("tokens", 0))
+
+    # ISO-8601 strings → aware datetimes (UTC)
+    created = datetime.fromisoformat(meta["created"].replace("Z", "+00:00"))
+    used = datetime.fromisoformat(meta["used"].replace("Z", "+00:00"))
+
+    return SessionInfo(
+        name=name,
+        created=created,
+        used=used,
+        tokens=tokens,
+    )
+
+
 def list_sessions() -> List[SessionInfo]:
     _ensure_dirs()
 
@@ -224,25 +246,8 @@ def list_sessions() -> List[SessionInfo]:
         if not f.endswith(".meta"):
             continue
 
-        meta_path = os.path.join(SESSION_DIR.get(), f)
-
-        # --- load timestamps from the .meta file ------------------------------
-        with open(meta_path, "r", encoding="utf-8") as fp:
-            meta = json.load(fp)
-        tokens = int(meta.get("tokens", 0))
-
-        # ISO-8601 strings → aware datetimes (UTC)
-        created = datetime.fromisoformat(meta["created"].replace("Z", "+00:00"))
-        used = datetime.fromisoformat(meta["used"].replace("Z", "+00:00"))
-
-        infos.append(
-            SessionInfo(
-                name=f.removesuffix(".meta"),
-                created=created,
-                used=used,
-                tokens=tokens,
-            )
-        )
+        if info := load_session_meta(f.removesuffix(".meta")):
+            infos.append(info)
 
     return sorted(infos, key=lambda s: [s.used], reverse=True)
 
