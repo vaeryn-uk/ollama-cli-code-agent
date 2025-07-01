@@ -1,4 +1,6 @@
 import argparse
+from curses.ascii import isdigit
+
 import humanize
 from datetime import datetime
 
@@ -28,7 +30,7 @@ from ocla.session import (
     set_current_session_name,
     get_current_session_name,
     generate_session_name,
-    session_exists,
+    session_exists, ContextWindowExceededError,
 )
 from ocla.tools import ALL, ToolSecurity
 import ollama
@@ -140,25 +142,20 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     return False
 
 
-def _model_context_length(model: str) -> int | None:
-    """Return the maximum context length for *model* if available."""
+def _model_context_limit(model: str) -> int | None:
     try:
-        info = ollama.show(model)
+        response = ollama.show(model)
     except Exception as e:
         logging.debug(f"failed to query model info: {e}")
         return None
 
-    for key in ("context_length", "num_ctx"):
-        val = (
-            info.get("details", {}).get(key)
-            or info.get("parameters", {}).get(key)
-            or info.get(key)
-        )
-        if val:
-            try:
-                return int(val)
-            except (TypeError, ValueError):
-                pass
+    for key in response.modelinfo:
+        if "context_length" in key or "num_ctx" in key:
+            if isinstance(response.modelinfo[key], str) and response.modelinfo[key].isdigit():
+                return int(response.modelinfo[key])
+
+            if type(response.modelinfo[key]) is int:
+                return response.modelinfo[key]
 
     return None
 
@@ -247,7 +244,7 @@ def do_chat(session: Session, prompt: str) -> str:
             )
 
     session.save()
-    info("")
+    info("session ")
     return "".join(accumulated_text)
 
 
@@ -286,14 +283,14 @@ def main(argv=None):
         if validation_err := var.validate():
             parser.error(f"Invalid value for {var.name}: {validation_err}")
 
-    model_ctx = _model_context_length(MODEL.get())
-    try:
-        ctx_conf = int(CONTEXT_WINDOW.get())
-    except ValueError:
-        ctx_conf = 0
+    model_ctx = _model_context_limit(MODEL.get())
+    if model_ctx is None:
+        logging.warning(f"Could not determine model context limit from ollama for model {MODEL.get()}")
+
+    ctx_conf = int(CONTEXT_WINDOW.get())
 
     if model_ctx and ctx_conf > model_ctx:
-        logging.warn(
+        logging.warning(
             "Configured context window %s exceeds model limit %s.",
             ctx_conf,
             model_ctx,
@@ -315,7 +312,6 @@ def main(argv=None):
             table.add_column("Tokens")
             table.add_column("% of Context")
             for s in list_sessions():
-                pct = (s.tokens / ctx_conf * 100) if ctx_conf else 0
                 table.add_row(
                     *(
                         (
@@ -326,7 +322,7 @@ def main(argv=None):
                         humanize.naturaltime(datetime.now(get_localzone()) - s.created),
                         humanize.naturaltime(datetime.now(get_localzone()) - s.used),
                         str(s.tokens),
-                        f"{pct:.0f}%",
+                        s.usage_pct(),
                     )
                 )
 
@@ -387,7 +383,11 @@ def main(argv=None):
     if get_current_session_name() is None:
         set_current_session_name(session_name)
 
-    do_chat(session, msg)
+    try:
+        do_chat(session, msg)
+    except ContextWindowExceededError as e:
+        error(e.exceeds_message)
+        return
 
 
 if __name__ == "__main__":

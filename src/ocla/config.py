@@ -76,7 +76,7 @@ CONTEXT_WINDOW = _var(
         env="OCLA_CONTEXT_WINDOW",
         config_file_property="contextWindow",
         default=str(8192 * 2),
-        validator_fn=lambda x: "" if x.isdigit() else "must be a positive integer",
+        validator_fn=lambda x: "" if x.isdigit() and int(x) > 0 else "must be a positive integer",
     )
 )
 

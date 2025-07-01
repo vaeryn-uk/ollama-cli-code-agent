@@ -1,3 +1,4 @@
+import functools
 import json
 import gzip
 import logging
@@ -14,7 +15,7 @@ from .config import (
     PROJECT_CONTEXT_FILE,
     SESSION_STORAGE_MODE,
     SESSION_STORAGE_MODE_PLAIN,
-    SESSION_STORAGE_MODE_COMPRESS,
+    SESSION_STORAGE_MODE_COMPRESS, CONTEXT_WINDOW,
 )
 
 from datetime import datetime
@@ -31,6 +32,12 @@ space will be rejected. You will be asked to operate within their project and as
 collaborator in the development process alongside them.
 """
 
+
+class ContextWindowExceededError(RuntimeError):
+    exceeds_message : str
+
+    def __init__(self, exceeds_message: str):
+        self.exceeds_message = exceeds_message
 
 def _encode_data(data: bytes, mode: str) -> bytes:
     """Encode *data* using the given *mode*."""
@@ -50,27 +57,32 @@ def _decode_data(data: bytes, mode: str) -> bytes:
     raise ValueError(f"Unknown SESSION_STORAGE_MODE: {mode}")
 
 
-def _estimate_tokens(text: str, model: str | None = None) -> int:
-    """Return a token count for *text* using ``tiktoken``."""
-    enc = None
+@functools.lru_cache(maxsize=None)
+def _get_token_encoder(model: str | None) -> tiktoken.Encoding | None:
     if model:
         try:
-            enc = tiktoken.encoding_for_model(model)
+            return tiktoken.encoding_for_model(model)
         except Exception:
-            logging.warning("no tokenizer for model %s; using default", model)
+            pass
 
+    logging.warning(f"Could not find a tokenizer for model {model}. Token counts maybe inaccurate. Falling back to cl100k_base")
+
+    try:
+        return tiktoken.get_encoding("cl100k_base")
+    except Exception:
+        logging.warning(f"Failed to load default tokenizer cl100k_base. Token counts maybe inaccurate")
+        return None
+
+
+def _estimate_tokens(text: str, model: str | None = None) -> int:
+    enc = _get_token_encoder(model)
     if enc is None:
-        try:
-            enc = tiktoken.get_encoding("cl100k_base")
-        except Exception as e:
-            logging.warning("failed to load tiktoken encoding: %s", e)
-            return len(str(text).split())
+        return len(text.split())
 
     try:
         return len(enc.encode(text))
-    except Exception as e:
-        logging.warning("tiktoken failed to encode text: %s", e)
-        return len(str(text).split())
+    except Exception:
+        return len(text.split())
 
 
 @dataclass
@@ -165,6 +177,10 @@ class Session:
             message = message.model_dump(mode="python", by_alias=True)
 
         self.messages.append(message)
+
+        if self.token_count() > int(CONTEXT_WINDOW.get()):
+            raise ContextWindowExceededError(f"Context window exceeded ({self.token_count()} / {CONTEXT_WINDOW.get()}). Please start a new session")
+
         self.save()
 
     def token_count(self) -> int:
@@ -189,6 +205,14 @@ class SessionInfo:
     created: datetime
     used: datetime
     tokens: int
+
+    def usage_pct(self) -> str:
+        pct = self.tokens / int(CONTEXT_WINDOW.get())
+
+        if pct > 1:
+            return f"{pct * 100:.0f}% (!)"
+
+        return f"{pct * 100:.0f}%"
 
 
 def list_sessions() -> List[SessionInfo]:
