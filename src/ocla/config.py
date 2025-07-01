@@ -178,12 +178,13 @@ PROJECT_CONTEXT_FILE = _var(
 
 SESSION_STORAGE_MODE_PLAIN = "PLAIN"
 SESSION_STORAGE_MODE_COMPRESS = "COMPRESS"
-SESSION_STORAGE_MODE_ENCRYPT = "ENCRYPT"
+# SESSION_STORAGE_MODE_ENCRYPT = "ENCRYPT" # TODO: Implement in the future?
 VALID_SESSION_STORAGE_MODE_MODES = [
     SESSION_STORAGE_MODE_PLAIN,
     SESSION_STORAGE_MODE_COMPRESS,
-    SESSION_STORAGE_MODE_ENCRYPT,
+    # SESSION_STORAGE_MODE_ENCRYPT,
 ]
+
 
 SESSION_STORAGE_MODE = _var(
     ConfigVar(
@@ -191,12 +192,10 @@ SESSION_STORAGE_MODE = _var(
         description="how we store session data on disk",
         env="OCLA_SESSION_STORAGE_MODE",
         config_file_property="sessionStorageMode",
-        default=SESSION_STORAGE_MODE_ENCRYPT,
+        default=SESSION_STORAGE_MODE_COMPRESS,
         allowed_values={
             SESSION_STORAGE_MODE_PLAIN: "Plain text (JSON). Can get large.",
-            SESSION_STORAGE_MODE_COMPRESS: "Compressed via TODO",
-            SESSION_STORAGE_MODE_ENCRYPT: "Compressed and encrypted via OS-provided encryption methods (if supported)",
+            SESSION_STORAGE_MODE_COMPRESS: "Compressed via gzip",
         },
-        validator_fn=lambda x: "",  # TODO: error if OS does not provide native encryption methods,
     )
 )

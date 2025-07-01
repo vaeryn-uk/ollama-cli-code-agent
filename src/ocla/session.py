@@ -1,11 +1,19 @@
 import json
+import gzip
 import logging
 import os
+import sys
 import time
 from datetime import timezone
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
-from .config import SESSION_DIR, PROJECT_CONTEXT_FILE
+from .config import (
+    SESSION_DIR,
+    PROJECT_CONTEXT_FILE,
+    SESSION_STORAGE_MODE,
+    SESSION_STORAGE_MODE_PLAIN,
+    SESSION_STORAGE_MODE_COMPRESS,
+)
 
 from datetime import datetime
 from pathlib import Path
@@ -22,34 +30,57 @@ collaborator in the development process alongside them.
 """
 
 
+def _encode_data(data: bytes, mode: str) -> bytes:
+    """Encode *data* using the given *mode*."""
+    if mode == SESSION_STORAGE_MODE_PLAIN:
+        return data
+    if mode == SESSION_STORAGE_MODE_COMPRESS:
+        return gzip.compress(data)
+    raise ValueError(f"Unknown SESSION_STORAGE_MODE: {mode}")
+
+
+def _decode_data(data: bytes, mode: str) -> bytes:
+    """Reverse of :func:`_encode_data` for the given *mode*."""
+    if mode == SESSION_STORAGE_MODE_PLAIN:
+        return data
+    if mode == SESSION_STORAGE_MODE_COMPRESS:
+        return gzip.decompress(data)
+    raise ValueError(f"Unknown SESSION_STORAGE_MODE: {mode}")
+
+
 @dataclass
 class Session:
     name: str
     path: str = field(init=False)
     meta_path: str = field(init=False)
     messages: List[Dict[str, Any]] = field(default_factory=list)
+    storage_mode: str = field(init=False)
 
     def __post_init__(self):
         # file locations
         self.path = os.path.join(SESSION_DIR.get(), f"{self.name}.session")
         self.meta_path = os.path.join(SESSION_DIR.get(), f"{self.name}.meta")
 
-        # (1) load messages if the session file exists
-        if os.path.exists(self.path):
-            with open(self.path, "r", encoding="utf-8") as f:
-                self.messages = json.load(f).get("messages", [])
-
-        # (2) load or create metadata
+        # (1) load metadata (if any) so we know how to decode the session file
         now_iso = datetime.now(timezone.utc).isoformat()
         if os.path.exists(self.meta_path):
             with open(self.meta_path, "r", encoding="utf-8") as f:
                 meta = json.load(f)
             self.created = meta.get("created", now_iso)
             self.used = meta.get("used", now_iso)
+            self.storage_mode = meta.get("storage_mode", SESSION_STORAGE_MODE.get())
         else:
             self.created = now_iso
             self.used = now_iso
+            self.storage_mode = SESSION_STORAGE_MODE.get()
             self._write_meta()  # create the .meta file immediately
+
+        # (2) load messages if the session file exists
+        if os.path.exists(self.path):
+            with open(self.path, "rb") as f:
+                raw = f.read()
+            decoded = _decode_data(raw, self.storage_mode)
+            self.messages = json.loads(decoded.decode("utf-8")).get("messages", [])
 
         if len(self.messages) == 0:
             self.add({"role": "system", "content": DEFAULT_SYSTEM_PROMPT})
@@ -75,13 +106,24 @@ class Session:
     def _write_meta(self) -> None:
         os.makedirs(SESSION_DIR.get(), exist_ok=True)
         with open(self.meta_path, "w", encoding="utf-8") as f:
-            json.dump({"created": self.created, "used": self.used}, f, indent=2)
+            json.dump(
+                {
+                    "created": self.created,
+                    "used": self.used,
+                    "storage_mode": self.storage_mode,
+                },
+                f,
+                indent=2,
+            )
 
     def save(self) -> None:
         """Persist messages and bump 'used' timestamp."""
         os.makedirs(SESSION_DIR.get(), exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump({"messages": self.messages}, f, indent=2)
+        self.storage_mode = SESSION_STORAGE_MODE.get()
+        data = json.dumps({"messages": self.messages}, indent=2).encode("utf-8")
+        encoded = _encode_data(data, self.storage_mode)
+        with open(self.path, "wb") as f:
+            f.write(encoded)
 
         self.used = datetime.now(timezone.utc).isoformat()
         self._write_meta()

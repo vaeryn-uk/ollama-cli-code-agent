@@ -16,7 +16,7 @@ your terminal.
 | `model` | `OCLA_MODEL` | `model` | `qwen3` | Model name |
 | `project_context_file` | `OCLA_PROJECT_CONTEXT_FILE` | `projectContextFiles` | `AGENTS.md` | the relative path to a file that gives ocla more context about your project (case-insensitive) |
 | `session_dir` | `OCLA_SESSION_DIR` | `sessionDir` | `./.ocla/sessions` | Path to the session directory |
-| `session_storage_mode` | `OCLA_SESSION_STORAGE_MODE` | `sessionStorageMode` | `ENCRYPT` | how we store session data on disk (`PLAIN`: Plain text (JSON). Can get large., `COMPRESS`: Compressed via TODO, `ENCRYPT`: Compressed and encrypted via OS-provided encryption methods (if supported)) |
+| `session_storage_mode` | `OCLA_SESSION_STORAGE_MODE` | `sessionStorageMode` | `COMPRESS` | how we store session data on disk (`PLAIN`: Plain text (JSON). Can get large., `COMPRESS`: Compressed via gzip) |
 | `state_file` | `OCLA_STATE_FILE` | `stateFile` | `./.ocla/state.json` | Path to the state file |
 | `tool_permission_mode` | `OCLA_TOOL_PERMISSION_MODE` | `toolPermissionMode` | `DEFAULT` | How tools request permission to run (`DEFAULT`: Ask for permission for non-trivial tools, `ALWAYS_ASK`: Always ask for permission for all tools, `ALWAYS_ALLOW`: Always run any tool; use with caution) |
 <!-- CONFIG_TABLE_END -->
