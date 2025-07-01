@@ -140,6 +140,29 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     return False
 
 
+def _model_context_length(model: str) -> int | None:
+    """Return the maximum context length for *model* if available."""
+    try:
+        info = ollama.show(model)
+    except Exception as e:
+        logging.debug(f"failed to query model info: {e}")
+        return None
+
+    for key in ("context_length", "num_ctx"):
+        val = (
+            info.get("details", {}).get(key)
+            or info.get("parameters", {}).get(key)
+            or info.get(key)
+        )
+        if val:
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                pass
+
+    return None
+
+
 def _chat_stream(**kwargs) -> tuple[str, Message]:
     content_parts: list[str] = []
     tool_calls: list[ollama.Message.ToolCall] = []  # gather all tool calls
@@ -263,6 +286,19 @@ def main(argv=None):
         if validation_err := var.validate():
             parser.error(f"Invalid value for {var.name}: {validation_err}")
 
+    model_ctx = _model_context_length(MODEL.get())
+    try:
+        ctx_conf = int(CONTEXT_WINDOW.get())
+    except ValueError:
+        ctx_conf = 0
+
+    if model_ctx and ctx_conf > model_ctx:
+        logging.warn(
+            "Configured context window %s exceeds model limit %s.",
+            ctx_conf,
+            model_ctx,
+        )
+
     if args.command == "session":
         if args.session_cmd == "new":
             name = args.name or generate_session_name()
@@ -276,7 +312,10 @@ def main(argv=None):
             table.add_column("Session")
             table.add_column("Created")
             table.add_column("Last Used")
+            table.add_column("Tokens")
+            table.add_column("% of Context")
             for s in list_sessions():
+                pct = (s.tokens / ctx_conf * 100) if ctx_conf else 0
                 table.add_row(
                     *(
                         (
@@ -286,6 +325,8 @@ def main(argv=None):
                         ),
                         humanize.naturaltime(datetime.now(get_localzone()) - s.created),
                         humanize.naturaltime(datetime.now(get_localzone()) - s.used),
+                        str(s.tokens),
+                        f"{pct:.0f}%",
                     )
                 )
 

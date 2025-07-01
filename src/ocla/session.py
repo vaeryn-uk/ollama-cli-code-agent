@@ -4,6 +4,8 @@ import logging
 import os
 import sys
 import time
+
+import tiktoken
 from datetime import timezone
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
@@ -48,6 +50,29 @@ def _decode_data(data: bytes, mode: str) -> bytes:
     raise ValueError(f"Unknown SESSION_STORAGE_MODE: {mode}")
 
 
+def _estimate_tokens(text: str, model: str | None = None) -> int:
+    """Return a token count for *text* using ``tiktoken``."""
+    enc = None
+    if model:
+        try:
+            enc = tiktoken.encoding_for_model(model)
+        except Exception:
+            logging.warning("no tokenizer for model %s; using default", model)
+
+    if enc is None:
+        try:
+            enc = tiktoken.get_encoding("cl100k_base")
+        except Exception as e:
+            logging.warning("failed to load tiktoken encoding: %s", e)
+            return len(str(text).split())
+
+    try:
+        return len(enc.encode(text))
+    except Exception as e:
+        logging.warning("tiktoken failed to encode text: %s", e)
+        return len(str(text).split())
+
+
 @dataclass
 class Session:
     name: str
@@ -55,6 +80,7 @@ class Session:
     meta_path: str = field(init=False)
     messages: List[Dict[str, Any]] = field(default_factory=list)
     storage_mode: str = field(init=False)
+    tokens: int = field(init=False, default=0)
 
     def __post_init__(self):
         # file locations
@@ -69,6 +95,7 @@ class Session:
             self.created = meta.get("created", now_iso)
             self.used = meta.get("used", now_iso)
             self.storage_mode = meta.get("storage_mode", SESSION_STORAGE_MODE.get())
+            self.tokens = int(meta.get("tokens", 0))
         else:
             self.created = now_iso
             self.used = now_iso
@@ -103,6 +130,8 @@ class Session:
                     f"project context file {PROJECT_CONTEXT_FILE.get()} could not be read"
                 )
 
+        self.tokens = self.token_count()
+
     def _write_meta(self) -> None:
         os.makedirs(SESSION_DIR.get(), exist_ok=True)
         with open(self.meta_path, "w", encoding="utf-8") as f:
@@ -111,6 +140,7 @@ class Session:
                     "created": self.created,
                     "used": self.used,
                     "storage_mode": self.storage_mode,
+                    "tokens": self.token_count(),
                 },
                 f,
                 indent=2,
@@ -126,6 +156,7 @@ class Session:
             f.write(encoded)
 
         self.used = datetime.now(timezone.utc).isoformat()
+        self.tokens = self.token_count()
         self._write_meta()
 
     def add(self, message: Dict[str, Any]) -> None:
@@ -135,6 +166,17 @@ class Session:
 
         self.messages.append(message)
         self.save()
+
+    def token_count(self) -> int:
+        """Estimate how many tokens are contained in this session."""
+        from .config import MODEL
+
+        total = 0
+        for m in self.messages:
+            content = m.get("content", "")
+            if content:
+                total += _estimate_tokens(str(content), MODEL.get())
+        return total
 
 
 def _ensure_dirs() -> None:
@@ -146,6 +188,7 @@ class SessionInfo:
     name: str
     created: datetime
     used: datetime
+    tokens: int
 
 
 def list_sessions() -> List[SessionInfo]:
@@ -162,6 +205,7 @@ def list_sessions() -> List[SessionInfo]:
         # --- load timestamps from the .meta file ------------------------------
         with open(meta_path, "r", encoding="utf-8") as fp:
             meta = json.load(fp)
+        tokens = int(meta.get("tokens", 0))
 
         # ISO-8601 strings → aware datetimes (UTC)
         created = datetime.fromisoformat(meta["created"].replace("Z", "+00:00"))
@@ -172,6 +216,7 @@ def list_sessions() -> List[SessionInfo]:
                 name=f.removesuffix(".meta"),
                 created=created,
                 used=used,
+                tokens=tokens,
             )
         )
 
