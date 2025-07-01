@@ -318,7 +318,10 @@ def main(argv=None):
                 var.get() or "",
                 (
                     "\n".join(
-                        [x[0] + ": " + x[1] for x in list(var.allowed_values.items())]
+                        [
+                            x[0] + ": " + x[1] if x[1] else x[0]
+                            for x in list(var.allowed_values.items())
+                        ]
                     )
                     if var.allowed_values
                     else ""
