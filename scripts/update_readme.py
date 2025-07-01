@@ -26,7 +26,9 @@ def generate_table() -> str:
         default = var.default or "N/A"
         desc = var.description
         if var.allowed_values:
-            allowed = ", ".join(f"{k}: {v}" for k, v in var.allowed_values.items())
+            allowed = ", ".join(
+                f"`{k}`: {v}" if v else f"`{k}`" for k, v in var.allowed_values.items()
+            )
             desc = f"{desc} ({allowed})"
         rows.append(f"| `{name}` | `{env}` | `{prop}` | `{default}` | {desc} |")
     return "\n".join([header, sep] + rows)
