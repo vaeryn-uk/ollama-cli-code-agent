@@ -98,11 +98,11 @@ LOG_LEVEL = _var(
         config_file_property="logLevel",
         default="WARNING",
         allowed_values={
-            "CRITICAL": "Critical",
-            "ERROR": "Error",
-            "WARNING": "Warning",
-            "INFO": "Info",
-            "DEBUG": "Debug",
+            "CRITICAL": "",
+            "ERROR": "",
+            "WARNING": "",
+            "INFO": "",
+            "DEBUG": "",
         },
     )
 )
@@ -144,7 +144,7 @@ TOOL_PERMISSION_MODE = _var(
         config_file_property="toolPermissionMode",
         default=TOOL_PERMISSION_MODE_DEFAULT,
         allowed_values={
-            TOOL_PERMISSION_MODE_DEFAULT: "Default: ask for permission for non-trivial tools",
+            TOOL_PERMISSION_MODE_DEFAULT: "Ask for permission for non-trivial tools",
             TOOL_PERMISSION_MODE_ALWAYS_ASK: "Always ask for permission for all tools",
             TOOL_PERMISSION_MODE_ALWAYS_ALLOW: "Always run any tool; use with caution",
         },
@@ -197,6 +197,6 @@ SESSION_STORAGE_MODE = _var(
             SESSION_STORAGE_MODE_COMPRESS: "Compressed via TODO",
             SESSION_STORAGE_MODE_ENCRYPT: "Compressed and encrypted via OS-provided encryption methods (if supported)",
         },
-        validator_fn=lambda x: "" # TODO: error if OS does not provide native encryption methods,
+        validator_fn=lambda x: "",  # TODO: error if OS does not provide native encryption methods,
     )
 )

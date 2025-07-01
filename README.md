@@ -1,21 +1,23 @@
-```poem
-In lines of code, both old and new,
-We craft the world with just a few.
-From loops that spin and functions that call,
-We build the dreams that make us bold.
+# Ollama CLI Code Agent
 
-A keyboard's whisper, a screen's bright light,
-We solve the puzzles, day and night.
-With logic as sharp as a coder's mind,
-We turn the abstract into signed.
+This project provides a command-line interface that wraps an AI agent powered by Ollama.
+Use it to generate code, analyze repositories and manage development tasks directly from
+your terminal.
 
-The bugs we chase, the fixes we find,
-Each error a step on the path designed.
-For in the code, both simple and grand,
-We find our purpose, our shared hand.
+## Configuration
 
-So here's to the craft, the art, the science,
-The magic that makes the digital dance.
-In every line, a story to tell,
-We code the future, we code ourselves.
-```
+<!-- CONFIG_TABLE_START -->
+| Name | Env | Config file | Default | Description |
+| --- | --- | --- | --- | --- |
+| `config_file` | `OCLA_CONFIG_FILE` | `N/A` | `./.ocla/config.json` | Path to the config file |
+| `context_window` | `OCLA_CONTEXT_WINDOW` | `contextWindow` | `16384` | Context window size in tokens |
+| `display_thinking` | `OCLA_DISPLAY_THINKING` | `displayThinking` | `True` | Display assistant thinking output (`True`: Display thinking output, `False`: Do not display thinking output) |
+| `log_level` | `OCLA_LOG_LEVEL` | `logLevel` | `WARNING` | Log level (`CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`) |
+| `model` | `OCLA_MODEL` | `model` | `qwen3` | Model name |
+| `project_context_file` | `OCLA_PROJECT_CONTEXT_FILE` | `projectContextFiles` | `AGENTS.md` | the relative path to a file that gives ocla more context about your project (case-insensitive) |
+| `session_dir` | `OCLA_SESSION_DIR` | `sessionDir` | `./.ocla/sessions` | Path to the session directory |
+| `session_storage_mode` | `OCLA_SESSION_STORAGE_MODE` | `sessionStorageMode` | `ENCRYPT` | how we store session data on disk (`PLAIN`: Plain text (JSON). Can get large., `COMPRESS`: Compressed via TODO, `ENCRYPT`: Compressed and encrypted via OS-provided encryption methods (if supported)) |
+| `state_file` | `OCLA_STATE_FILE` | `stateFile` | `./.ocla/state.json` | Path to the state file |
+| `tool_permission_mode` | `OCLA_TOOL_PERMISSION_MODE` | `toolPermissionMode` | `DEFAULT` | How tools request permission to run (`DEFAULT`: Ask for permission for non-trivial tools, `ALWAYS_ASK`: Always ask for permission for all tools, `ALWAYS_ALLOW`: Always run any tool; use with caution) |
+<!-- CONFIG_TABLE_END -->
+
