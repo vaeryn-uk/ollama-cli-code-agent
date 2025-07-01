@@ -1,4 +1,6 @@
 import argparse
+from curses.ascii import isdigit
+
 import humanize
 from datetime import datetime
 
@@ -28,7 +30,7 @@ from ocla.session import (
     set_current_session_name,
     get_current_session_name,
     generate_session_name,
-    session_exists,
+    session_exists, ContextWindowExceededError, load_session_meta,
 )
 from ocla.tools import ALL, ToolSecurity
 import ollama
@@ -140,6 +142,24 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     return False
 
 
+def _model_context_limit(model: str) -> int | None:
+    try:
+        response = ollama.show(model)
+    except Exception as e:
+        logging.debug(f"failed to query model info: {e}")
+        return None
+
+    for key in response.modelinfo:
+        if "context_length" in key or "num_ctx" in key:
+            if isinstance(response.modelinfo[key], str) and response.modelinfo[key].isdigit():
+                return int(response.modelinfo[key])
+
+            if type(response.modelinfo[key]) is int:
+                return response.modelinfo[key]
+
+    return None
+
+
 def _chat_stream(**kwargs) -> tuple[str, Message]:
     content_parts: list[str] = []
     tool_calls: list[ollama.Message.ToolCall] = []  # gather all tool calls
@@ -225,6 +245,9 @@ def do_chat(session: Session, prompt: str) -> str:
 
     session.save()
     info("")
+
+    info(f"session context usage {load_session_meta(session.name).usage_pct()}")
+
     return "".join(accumulated_text)
 
 
@@ -256,12 +279,26 @@ def main(argv=None):
     session_set.add_argument("name")
 
     subparsers.add_parser("config", help="Show config information")
+    subparsers.add_parser("model", help="Show model information")
 
     args, prompt_parts = parser.parse_known_args(argv)
 
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():
             parser.error(f"Invalid value for {var.name}: {validation_err}")
+
+    model_ctx = _model_context_limit(MODEL.get())
+    if model_ctx is None:
+        logging.warning(f"Could not determine model context limit from ollama for model {MODEL.get()}")
+
+    ctx_conf = int(CONTEXT_WINDOW.get())
+
+    if model_ctx and ctx_conf > model_ctx:
+        logging.warning(
+            "Configured context window %s exceeds model limit %s.",
+            ctx_conf,
+            model_ctx,
+        )
 
     if args.command == "session":
         if args.session_cmd == "new":
@@ -276,6 +313,8 @@ def main(argv=None):
             table.add_column("Session")
             table.add_column("Created")
             table.add_column("Last Used")
+            table.add_column("Tokens")
+            table.add_column("% of Context")
             for s in list_sessions():
                 table.add_row(
                     *(
@@ -286,6 +325,8 @@ def main(argv=None):
                         ),
                         humanize.naturaltime(datetime.now(get_localzone()) - s.created),
                         humanize.naturaltime(datetime.now(get_localzone()) - s.used),
+                        str(s.tokens),
+                        s.usage_pct(),
                     )
                 )
 
@@ -330,6 +371,18 @@ def main(argv=None):
 
         console.print(table)
         return
+    elif args.command == "model":
+        table = Table(title="Model info", show_header=False)
+
+        table.add_column("key")
+        table.add_column("value")
+
+        table.add_row("Name", MODEL.get())
+        table.add_row("Context window (model max)", str(_model_context_limit(MODEL.get())) or "N/A")
+        table.add_row("Context window (configured)", f"{CONTEXT_WINDOW.get()}")
+
+        console.print(table)
+        return
 
     session_name = get_current_session_name() or generate_session_name()
     if args.new_session:
@@ -346,7 +399,11 @@ def main(argv=None):
     if get_current_session_name() is None:
         set_current_session_name(session_name)
 
-    do_chat(session, msg)
+    try:
+        do_chat(session, msg)
+    except ContextWindowExceededError as e:
+        error(e.exceeds_message)
+        return
 
 
 if __name__ == "__main__":

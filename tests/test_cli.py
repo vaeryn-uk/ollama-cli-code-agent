@@ -1,5 +1,6 @@
 from io import StringIO
 import sys
+import logging
 from .helpers import (
     mock_ollama_responses,
     content,
@@ -34,5 +35,21 @@ def test_cli_tool_called(monkeypatch, capsys):
     cli_main([])
     captured = capsys.readouterr()
     assert captured.out.strip().splitlines()[-1] == "done"
+
+    assert_scenario_completed(scenario)
+
+
+def test_context_window_warning(monkeypatch, capsys, caplog):
+    scenario = mock_ollama_responses(content("pong"))
+
+    monkeypatch.setattr("ocla.cli._model_context_length", lambda model: 5)
+    monkeypatch.setenv("OCLA_CONTEXT_WINDOW", "10")
+
+    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
+
+    with caplog.at_level(logging.WARNING):
+        cli_main([])
+    captured = capsys.readouterr()
+    assert "exceeds model limit" in caplog.text
 
     assert_scenario_completed(scenario)
