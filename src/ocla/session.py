@@ -57,11 +57,20 @@ class Session:
             try:
                 content = Path(PROJECT_CONTEXT_FILE.get()).read_text()
                 if content:
-                    self.add({"role": "system", "content": f"Additional project context:\n{content}"})
+                    self.add(
+                        {
+                            "role": "system",
+                            "content": f"Additional project context:\n{content}",
+                        }
+                    )
                 else:
-                    logging.debug(f"project context file {PROJECT_CONTEXT_FILE.get()} was empty")
+                    logging.debug(
+                        f"project context file {PROJECT_CONTEXT_FILE.get()} was empty"
+                    )
             except Exception as e:
-                logging.debug(f"project context file {PROJECT_CONTEXT_FILE.get()} could not be read")
+                logging.debug(
+                    f"project context file {PROJECT_CONTEXT_FILE.get()} could not be read"
+                )
 
     def _write_meta(self) -> None:
         os.makedirs(SESSION_DIR.get(), exist_ok=True)

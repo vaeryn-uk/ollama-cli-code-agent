@@ -197,6 +197,6 @@ SESSION_STORAGE_MODE = _var(
             SESSION_STORAGE_MODE_COMPRESS: "Compressed via TODO",
             SESSION_STORAGE_MODE_ENCRYPT: "Compressed and encrypted via OS-provided encryption methods (if supported)",
         },
-        validator_fn=lambda x: "" # TODO: error if OS does not provide native encryption methods,
+        validator_fn=lambda x: "",  # TODO: error if OS does not provide native encryption methods,
     )
 )

@@ -21,3 +21,6 @@ lint:
 
 fmt:
 	uv run -p $(VENV) black .
+# Update README documentation
+docs:
+	uv run -p $(VENV) python scripts/update_readme.py
