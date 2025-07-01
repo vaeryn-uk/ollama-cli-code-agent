@@ -185,18 +185,35 @@ VALID_SESSION_STORAGE_MODE_MODES = [
     SESSION_STORAGE_MODE_ENCRYPT,
 ]
 
+
+def _encryption_supported() -> bool:
+    """Return True if the current OS supports encrypted session storage."""
+    return os.name == "nt"
+
+
+SESSION_STORAGE_MODE_DEFAULT = (
+    SESSION_STORAGE_MODE_ENCRYPT
+    if _encryption_supported()
+    else SESSION_STORAGE_MODE_COMPRESS
+)
+
+
 SESSION_STORAGE_MODE = _var(
     ConfigVar(
         name="session_storage_mode",
         description="how we store session data on disk",
         env="OCLA_SESSION_STORAGE_MODE",
         config_file_property="sessionStorageMode",
-        default=SESSION_STORAGE_MODE_ENCRYPT,
+        default=SESSION_STORAGE_MODE_DEFAULT,
         allowed_values={
             SESSION_STORAGE_MODE_PLAIN: "Plain text (JSON). Can get large.",
-            SESSION_STORAGE_MODE_COMPRESS: "Compressed via TODO",
+            SESSION_STORAGE_MODE_COMPRESS: "Compressed via gzip",
             SESSION_STORAGE_MODE_ENCRYPT: "Compressed and encrypted via OS-provided encryption methods (if supported)",
         },
-        validator_fn=lambda x: "" # TODO: error if OS does not provide native encryption methods,
+        validator_fn=lambda x: (
+            "OS does not support encryption"
+            if x == SESSION_STORAGE_MODE_ENCRYPT and not _encryption_supported()
+            else ""
+        ),
     )
 )
