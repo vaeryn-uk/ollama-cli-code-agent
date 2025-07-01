@@ -13,7 +13,6 @@ from .config import (
     SESSION_STORAGE_MODE,
     SESSION_STORAGE_MODE_PLAIN,
     SESSION_STORAGE_MODE_COMPRESS,
-    SESSION_STORAGE_MODE_ENCRYPT,
 )
 
 from datetime import datetime
@@ -31,79 +30,12 @@ collaborator in the development process alongside them.
 """
 
 
-def _encrypt_os(data: bytes) -> bytes:
-    if sys.platform.startswith("win"):
-        import ctypes
-        from ctypes import wintypes
-
-        class DATA_BLOB(ctypes.Structure):
-            _fields_ = [
-                ("cbData", wintypes.DWORD),
-                ("pbData", ctypes.POINTER(ctypes.c_byte)),
-            ]
-
-        crypt32 = ctypes.windll.crypt32
-        kernel32 = ctypes.windll.kernel32
-
-        blob_in = DATA_BLOB(
-            len(data),
-            ctypes.cast(
-                ctypes.create_string_buffer(data), ctypes.POINTER(ctypes.c_byte)
-            ),
-        )
-        blob_out = DATA_BLOB()
-        if not crypt32.CryptProtectData(
-            ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)
-        ):
-            raise ctypes.WinError()
-        try:
-            return ctypes.string_at(blob_out.pbData, blob_out.cbData)
-        finally:
-            kernel32.LocalFree(blob_out.pbData)
-    raise RuntimeError("OS does not support encrypted sessions")
-
-
-def _decrypt_os(data: bytes) -> bytes:
-    if sys.platform.startswith("win"):
-        import ctypes
-        from ctypes import wintypes
-
-        class DATA_BLOB(ctypes.Structure):
-            _fields_ = [
-                ("cbData", wintypes.DWORD),
-                ("pbData", ctypes.POINTER(ctypes.c_byte)),
-            ]
-
-        crypt32 = ctypes.windll.crypt32
-        kernel32 = ctypes.windll.kernel32
-
-        blob_in = DATA_BLOB(
-            len(data),
-            ctypes.cast(
-                ctypes.create_string_buffer(data), ctypes.POINTER(ctypes.c_byte)
-            ),
-        )
-        blob_out = DATA_BLOB()
-        if not crypt32.CryptUnprotectData(
-            ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)
-        ):
-            raise ctypes.WinError()
-        try:
-            return ctypes.string_at(blob_out.pbData, blob_out.cbData)
-        finally:
-            kernel32.LocalFree(blob_out.pbData)
-    raise RuntimeError("OS does not support encrypted sessions")
-
-
 def _encode_data(data: bytes, mode: str) -> bytes:
     """Encode *data* using the given *mode*."""
     if mode == SESSION_STORAGE_MODE_PLAIN:
         return data
     if mode == SESSION_STORAGE_MODE_COMPRESS:
         return gzip.compress(data)
-    if mode == SESSION_STORAGE_MODE_ENCRYPT:
-        enc = gzip.compress(data)
-        return _encrypt_os(enc)
     raise ValueError(f"Unknown SESSION_STORAGE_MODE: {mode}")
 
 
@@ -113,9 +45,6 @@ def _decode_data(data: bytes, mode: str) -> bytes:
         return data
     if mode == SESSION_STORAGE_MODE_COMPRESS:
         return gzip.decompress(data)
-    if mode == SESSION_STORAGE_MODE_ENCRYPT:
-        dec = _decrypt_os(data)
-        return gzip.decompress(dec)
     raise ValueError(f"Unknown SESSION_STORAGE_MODE: {mode}")
 
 

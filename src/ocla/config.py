@@ -178,24 +178,12 @@ PROJECT_CONTEXT_FILE = _var(
 
 SESSION_STORAGE_MODE_PLAIN = "PLAIN"
 SESSION_STORAGE_MODE_COMPRESS = "COMPRESS"
-SESSION_STORAGE_MODE_ENCRYPT = "ENCRYPT"
+# SESSION_STORAGE_MODE_ENCRYPT = "ENCRYPT" # TODO: Implement in the future?
 VALID_SESSION_STORAGE_MODE_MODES = [
     SESSION_STORAGE_MODE_PLAIN,
     SESSION_STORAGE_MODE_COMPRESS,
-    SESSION_STORAGE_MODE_ENCRYPT,
+    # SESSION_STORAGE_MODE_ENCRYPT,
 ]
-
-
-def _encryption_supported() -> bool:
-    """Return True if the current OS supports encrypted session storage."""
-    return os.name == "nt"
-
-
-SESSION_STORAGE_MODE_DEFAULT = (
-    SESSION_STORAGE_MODE_ENCRYPT
-    if _encryption_supported()
-    else SESSION_STORAGE_MODE_COMPRESS
-)
 
 
 SESSION_STORAGE_MODE = _var(
@@ -204,16 +192,10 @@ SESSION_STORAGE_MODE = _var(
         description="how we store session data on disk",
         env="OCLA_SESSION_STORAGE_MODE",
         config_file_property="sessionStorageMode",
-        default=SESSION_STORAGE_MODE_DEFAULT,
+        default=SESSION_STORAGE_MODE_COMPRESS,
         allowed_values={
             SESSION_STORAGE_MODE_PLAIN: "Plain text (JSON). Can get large.",
             SESSION_STORAGE_MODE_COMPRESS: "Compressed via gzip",
-            SESSION_STORAGE_MODE_ENCRYPT: "Compressed and encrypted via OS-provided encryption methods (if supported)",
         },
-        validator_fn=lambda x: (
-            "OS does not support encryption"
-            if x == SESSION_STORAGE_MODE_ENCRYPT and not _encryption_supported()
-            else ""
-        ),
     )
 )

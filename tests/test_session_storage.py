@@ -26,13 +26,6 @@ def test_session_compress(monkeypatch, tmp_path):
     _roundtrip(monkeypatch, tmp_path, "COMPRESS")
 
 
-def test_session_encrypt(monkeypatch, tmp_path):
-    try:
-        _roundtrip(monkeypatch, tmp_path, "ENCRYPT")
-    except RuntimeError:
-        pytest.skip("encryption not supported on this platform")
-
-
 def test_mode_switch(monkeypatch, tmp_path):
     """Sessions encoded in one mode can be read after changing the config."""
     _roundtrip(monkeypatch, tmp_path, "PLAIN", read_mode="COMPRESS")
