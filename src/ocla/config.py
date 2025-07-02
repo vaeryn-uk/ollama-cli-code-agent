@@ -40,7 +40,7 @@ class ConfigVar:
                     _have_logged_invalid_config = True
                     logging.warning(f"Config file {CONFIG_FILE.get()} not valid JSON")
             except FileNotFoundError:
-                pass
+                value = self.default
         else:
             value = self.default
 
@@ -75,7 +75,9 @@ def add_cli_args(parser: argparse.ArgumentParser) -> None:
                 dest=var.name,
                 help=var.description,
                 default=argparse.SUPPRESS,
-                type=lambda x: x if var.normalizer is None else var.normalizer(x),
+                type=(
+                    (lambda x, v=var: x if v.normalizer is None else v.normalizer(x))
+                ),
                 choices=list(var.allowed_values.keys()) if var.allowed_values else None,
             )
 
@@ -200,17 +202,24 @@ TOOL_PERMISSION_MODE = _var(
     )
 )
 
-DISPLAY_THINKING = _var(
+THINKING_DISABLED = "DISABLED"
+THINKING_HIDDEN = "HIDDEN"
+THINKING_ENABLED = "ENABLED"
+
+THINKING = _var(
     ConfigVar(
-        name="display_thinking",
-        description="Display assistant thinking output",
-        env="OCLA_DISPLAY_THINKING",
-        config_file_property="displayThinking",
-        default="True",
+        name="thinking",
+        description="Enable & show model thinking, if supported.",
+        env="OCLA_THINKING",
+        config_file_property="thinking",
+        default=THINKING_ENABLED,
+        normalizer=lambda x: x.upper(),
         allowed_values={
-            "True": "Display thinking output",
-            "False": "Do not display thinking output",
+            THINKING_DISABLED: "The model will not think and nothing is shown",
+            THINKING_HIDDEN: "The model will think, but thinking output is not displayed",
+            THINKING_ENABLED: "The model will think and ocla prints this output",
         },
+        cli=("-t", "--thinking"),
     )
 )
 

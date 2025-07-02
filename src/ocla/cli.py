@@ -24,7 +24,9 @@ from ocla.config import (
     add_cli_args,
     apply_cli_args,
     TOOL_PERMISSION_MODE,
-    DISPLAY_THINKING,
+    THINKING,
+    THINKING_DISABLED,
+    THINKING_ENABLED,
     TOOL_PERMISSION_MODE_DEFAULT,
     TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
     OLLAMA_HOST_OVERRIDE,
@@ -182,46 +184,55 @@ def _model_context_limit(model: str) -> int | None:
     return None
 
 
+def _model_supports_thinking(model: str) -> bool | None:
+    try:
+        response = ollama.show(model)
+    except Exception as e:
+        logging.debug(f"failed to query model info: {e}")
+        return None
+
+    if response.capabilities and "thinking" in response.capabilities:
+        return True
+
+    return False
+
+
 def _chat_stream(**kwargs) -> tuple[str, Message]:
-    content_parts: list[str] = []
+    full_content: str = ""
+    full_thinking: str = ""
     tool_calls: list[ollama.Message.ToolCall] = []  # gather all tool calls
     last_role: str | None = None  # keep whatever role we see last
 
-    thinking = False
-    show_thinking = DISPLAY_THINKING.get().lower() != "false"
+    thinking_mode = THINKING.get()
+    enable_think = thinking_mode != THINKING_DISABLED
+    show_thinking = thinking_mode == THINKING_ENABLED
 
     for chunk in ollama.chat(
-        stream=True, options={"num_ctx": int(CONTEXT_WINDOW.get())}, **kwargs
+        stream=True,
+        think=enable_think,
+        options={"num_ctx": int(CONTEXT_WINDOW.get())},
+        **kwargs,
     ):
         msg = chunk.get("message", {})
         last_role = msg.get("role", last_role)
 
-        part = msg.get("content") or ""
+        if part := msg.get("content"):
+            full_thinking += part
+            agent_output(part, thinking=False, end="")
 
-        if part:
-            content_parts.append(part)
-            output = True
-
-            if part == "<think>":
-                thinking = True
-                output = False
-
-            if thinking and part == "</think>":
-                thinking = False
-                output = False
-
-            if output and (show_thinking or not thinking):
-                agent_output(part, thinking=thinking, end="")
+        if part := msg.get("thinking"):
+            full_thinking += part
+            if show_thinking:
+                agent_output(part, thinking=True, end="")
 
         if "tool_calls" in msg:
             tool_calls.extend(msg["tool_calls"])
-
-    full_content = "".join(content_parts)
 
     # Build a consolidated assistant message
     assistant_msg = Message(
         role=last_role or "assistant",
         content=full_content,
+        thinking=full_thinking,
         tool_calls=tool_calls,
     )
 
@@ -420,6 +431,12 @@ def main(argv=None):
             str(_model_context_limit(MODEL.get())) or "N/A",
         )
         table.add_row("Context window (configured)", f"{CONTEXT_WINDOW.get()}")
+        supported = _model_supports_thinking(MODEL.get())
+        table.add_row(
+            "Supports thinking",
+            "N/A" if supported is None else str(supported),
+        )
+        table.add_row("Thinking setting", THINKING.get())
 
         console.print(table)
         return

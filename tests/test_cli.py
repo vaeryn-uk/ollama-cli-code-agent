@@ -62,3 +62,24 @@ def test_ocla_ollama_host_overrides(monkeypatch, capsys):
     assert os.environ["OLLAMA_HOST"] == WIREMOCK_BASE_URL
 
     assert_scenario_completed(scenario)
+
+
+def test_thinking_cli_arg(monkeypatch):
+    scenario = mock_ollama_responses(content("pong"))
+
+    captured = {}
+    orig_chat = ocla.cli.ollama.chat
+
+    def fake_chat(*args, **kwargs):
+        captured["think"] = kwargs.get("think")
+        return orig_chat(*args, **kwargs)
+
+    monkeypatch.setattr(ocla.cli.ollama, "chat", fake_chat)
+    monkeypatch.setenv(PROMPT_MODE.env, "oneshot")
+    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
+
+    cli_main(["--thinking", "DISABLED"])
+
+    assert captured.get("think") is False
+
+    assert_scenario_completed(scenario)
