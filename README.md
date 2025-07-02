@@ -7,17 +7,18 @@ your terminal.
 ## Configuration
 
 <!-- CONFIG_TABLE_START -->
-| Name | Env | Config file | Default | Description |
-| --- | --- | --- | --- | --- |
-| `config_file` | `OCLA_CONFIG_FILE` | `N/A` | `./.ocla/config.json` | Path to the config file |
-| `context_window` | `OCLA_CONTEXT_WINDOW` | `contextWindow` | `16384` | Context window size in tokens |
-| `display_thinking` | `OCLA_DISPLAY_THINKING` | `displayThinking` | `True` | Display assistant thinking output (`True`: Display thinking output, `False`: Do not display thinking output) |
-| `log_level` | `OCLA_LOG_LEVEL` | `logLevel` | `WARNING` | Log level (`CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`) |
-| `model` | `OCLA_MODEL` | `model` | `qwen3` | Model name |
-| `project_context_file` | `OCLA_PROJECT_CONTEXT_FILE` | `projectContextFiles` | `AGENTS.md` | the relative path to a file that gives ocla more context about your project (case-insensitive) |
-| `session_dir` | `OCLA_SESSION_DIR` | `sessionDir` | `./.ocla/sessions` | Path to the session directory |
-| `session_storage_mode` | `OCLA_SESSION_STORAGE_MODE` | `sessionStorageMode` | `COMPRESS` | how we store session data on disk (`PLAIN`: Plain text (JSON). Can get large., `COMPRESS`: Compressed via gzip) |
-| `state_file` | `OCLA_STATE_FILE` | `stateFile` | `./.ocla/state.json` | Path to the state file |
-| `tool_permission_mode` | `OCLA_TOOL_PERMISSION_MODE` | `toolPermissionMode` | `DEFAULT` | How tools request permission to run (`DEFAULT`: Ask for permission for non-trivial tools, `ALWAYS_ASK`: Always ask for permission for all tools, `ALWAYS_ALLOW`: Always run any tool; use with caution) |
+| Name | CLI | Env | Config file | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `config_file` | `N/A` | `OCLA_CONFIG_FILE` | `N/A` | `./.ocla/config.json` | Path to the config file |
+| `context_window` | `N/A` | `OCLA_CONTEXT_WINDOW` | `contextWindow` | `16384` | Context window size in tokens |
+| `display_thinking` | `N/A` | `OCLA_DISPLAY_THINKING` | `displayThinking` | `True` | Display assistant thinking output (`True`: Display thinking output, `False`: Do not display thinking output) |
+| `log_level` | `N/A` | `OCLA_LOG_LEVEL` | `logLevel` | `WARNING` | Log level (`CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`) |
+| `model` | `-m --model` | `OCLA_MODEL` | `model` | `qwen3` | Model name |
+| `project_context_file` | `N/A` | `OCLA_PROJECT_CONTEXT_FILE` | `projectContextFiles` | `AGENTS.md` | the relative path to a file that gives ocla more context about your project (case-insensitive) |
+| `prompt_mode` | `-p --prompt-mode` | `OCLA_SESSION_STORAGE_MODE` | `promptMode` | `INTERACTIVE` | How you want to interact with the assistant (`ONESHOT`: The program quits after a single prompt, `INTERACTIVE`: You issue prompts until quit) |
+| `session_dir` | `N/A` | `OCLA_SESSION_DIR` | `sessionDir` | `./.ocla/sessions` | Path to the session directory |
+| `session_storage_mode` | `N/A` | `OCLA_SESSION_STORAGE_MODE` | `sessionStorageMode` | `COMPRESS` | how we store session data on disk (`PLAIN`: Plain text (JSON). Can get large., `COMPRESS`: Compressed via gzip) |
+| `state_file` | `N/A` | `OCLA_STATE_FILE` | `stateFile` | `./.ocla/state.json` | Path to the state file |
+| `tool_permission_mode` | `N/A` | `OCLA_TOOL_PERMISSION_MODE` | `toolPermissionMode` | `DEFAULT` | How tools request permission to run (`DEFAULT`: Ask for permission for non-trivial tools, `ALWAYS_ASK`: Always ask for permission for all tools, `ALWAYS_ALLOW`: Always run any tool; use with caution) |
 <!-- CONFIG_TABLE_END -->
 

@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import dataclasses
@@ -5,6 +6,7 @@ import json
 from typing import Optional, Callable
 
 _have_logged_invalid_config = False
+_cli_values: dict[str, str] = {}
 
 
 @dataclasses.dataclass
@@ -15,27 +17,37 @@ class ConfigVar:
     config_file_property: Optional[str] = None
     default: Optional[str] = None
     validator_fn: Optional[Callable[[Optional[str]], str]] = None
+    normalizer: Optional[Callable[[str], str]] = None
     allowed_values: Optional[dict[str, str]] = None
+    cli: Optional[tuple[str, ...]] = None
 
     def get(self) -> str:
         global _have_logged_invalid_config
 
-        if self.env and os.environ.get(self.env):
-            return os.environ.get(self.env)
+        value = None
 
-        if self.config_file_property:
+        if self.name in _cli_values:
+            value = _cli_values[self.name]
+        elif self.env and os.environ.get(self.env):
+            value = os.environ.get(self.env)
+        elif self.config_file_property:
             try:
                 with open(CONFIG_FILE.get(), "r", encoding="utf-8") as f:
                     data = json.load(f)
-                return str(data.get(self.config_file_property, self.default))
+                value = str(data.get(self.config_file_property, self.default))
             except (json.JSONDecodeError, TypeError):
                 if not _have_logged_invalid_config:
                     _have_logged_invalid_config = True
                     logging.warning(f"Config file {CONFIG_FILE.get()} not valid JSON")
             except FileNotFoundError:
                 pass
+        else:
+            value = self.default
 
-        return self.default
+        if value and self.normalizer:
+            value = self.normalizer(value)
+
+        return value
 
     def validate(self) -> Optional[str]:
         if self.validator_fn:
@@ -52,6 +64,30 @@ class ConfigVar:
 
 
 CONFIG_VARS: dict[str, ConfigVar] = {}
+
+
+def add_cli_args(parser: argparse.ArgumentParser) -> None:
+    """Register CLI arguments for all config variables that define them."""
+    for var in CONFIG_VARS.values():
+        if var.cli:
+            parser.add_argument(
+                *var.cli,
+                dest=var.name,
+                help=var.description,
+                default=argparse.SUPPRESS,
+                type=lambda x: x if var.normalizer is None else var.normalizer(x),
+                choices=list(var.allowed_values.keys()) if var.allowed_values else None,
+            )
+
+
+def apply_cli_args(args: argparse.Namespace) -> None:
+    """Apply overrides from *args* returned by argparse."""
+    overrides: dict[str, str] = {}
+    for var in CONFIG_VARS.values():
+        if var.cli and hasattr(args, var.name):
+            overrides[var.name] = getattr(args, var.name)
+
+    _cli_values.update(overrides)
 
 
 def _var(var: ConfigVar) -> ConfigVar:
@@ -76,7 +112,9 @@ CONTEXT_WINDOW = _var(
         env="OCLA_CONTEXT_WINDOW",
         config_file_property="contextWindow",
         default=str(8192 * 2),
-        validator_fn=lambda x: "" if x.isdigit() and int(x) > 0 else "must be a positive integer",
+        validator_fn=lambda x: (
+            "" if x.isdigit() and int(x) > 0 else "must be a positive integer"
+        ),
     )
 )
 
@@ -87,6 +125,7 @@ MODEL = _var(
         env="OCLA_MODEL",
         config_file_property="model",
         default="qwen3",
+        cli=("-m", "--model"),
     )
 )
 
@@ -196,6 +235,23 @@ SESSION_STORAGE_MODE = _var(
         allowed_values={
             SESSION_STORAGE_MODE_PLAIN: "Plain text (JSON). Can get large.",
             SESSION_STORAGE_MODE_COMPRESS: "Compressed via gzip",
+        },
+    )
+)
+
+
+PROMPT_MODE = _var(
+    ConfigVar(
+        name="prompt_mode",
+        description="How you want to interact with the assistant",
+        env="OCLA_SESSION_STORAGE_MODE",
+        config_file_property="promptMode",
+        default="INTERACTIVE",
+        cli=("-p", "--prompt-mode"),
+        normalizer=lambda x: x.upper(),
+        allowed_values={
+            "ONESHOT": "The program quits after a single prompt",
+            "INTERACTIVE": "You issue prompts until quit",
         },
     )
 )

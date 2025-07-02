@@ -12,9 +12,8 @@ from . import Tool, ToolSecurity
 
 
 class ListFiles(Tool):
-    """Return a list of files and folders in the given directory."""
-
     security = ToolSecurity.PERMISSIBLE
+    description = "List all files and folders in the requested path"
 
     def execute(self, path: str = ".", recursive: bool = False) -> (list[str], str):
         root = Path(path)
@@ -37,9 +36,8 @@ class ListFiles(Tool):
 
 
 class ReadFile(Tool):
-    """Read the contents of a file."""
-
     security = ToolSecurity.PERMISSIBLE
+    description = "Read the contents of a single file"
 
     def execute(self, path: str = ".", encoding: str = "utf-8") -> (str, str):
         file_path = Path(path)
@@ -52,6 +50,7 @@ class ReadFile(Tool):
 
 class WriteFile(Tool):
     security = ToolSecurity.ASK
+    description = "Overwrite the contents of the given file with new content"
 
     def execute(
         self, path: str, new_content: str, encoding: str = "utf-8"

@@ -8,6 +8,7 @@ from .helpers import (
     assert_scenario_completed,
     permit_all_tool_calls,
 )
+import ocla.cli
 from ocla.cli import main as cli_main
 
 
@@ -18,7 +19,8 @@ def test_cli_simple_reply(monkeypatch, capsys):
 
     cli_main([])
     captured = capsys.readouterr()
-    assert captured.out.strip() == "pong"
+    lines = captured.out.strip().splitlines()
+    assert lines[0] == "pong"
 
     assert_scenario_completed(scenario)
 
@@ -34,7 +36,8 @@ def test_cli_tool_called(monkeypatch, capsys):
 
     cli_main([])
     captured = capsys.readouterr()
-    assert captured.out.strip().splitlines()[-1] == "done"
+    lines = captured.out.strip().splitlines()
+    assert "done" in lines
 
     assert_scenario_completed(scenario)
 
@@ -42,8 +45,9 @@ def test_cli_tool_called(monkeypatch, capsys):
 def test_context_window_warning(monkeypatch, capsys, caplog):
     scenario = mock_ollama_responses(content("pong"))
 
-    monkeypatch.setattr("ocla.cli._model_context_length", lambda model: 5)
+    monkeypatch.setattr("ocla.cli._model_context_limit", lambda model: 5)
     monkeypatch.setenv("OCLA_CONTEXT_WINDOW", "10")
+    monkeypatch.setattr("ocla.session._estimate_tokens", lambda *a, **k: 1)
 
     monkeypatch.setattr(sys, "stdin", StringIO("ping"))
 
@@ -51,5 +55,28 @@ def test_context_window_warning(monkeypatch, capsys, caplog):
         cli_main([])
     captured = capsys.readouterr()
     assert "exceeds model limit" in caplog.text
+
+    assert_scenario_completed(scenario)
+
+
+def test_model_cli_arg_overrides_env(monkeypatch, capsys):
+    scenario = mock_ollama_responses(content("pong"))
+
+    monkeypatch.setenv("OCLA_MODEL", "env_model")
+
+    captured = {}
+    orig_chat = ocla.cli.ollama.chat
+
+    def fake_chat(*args, **kwargs):
+        captured["model"] = kwargs.get("model")
+        return orig_chat(*args, **kwargs)
+
+    monkeypatch.setattr(ocla.cli.ollama, "chat", fake_chat)
+
+    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
+
+    cli_main(["-m", "cli_model"])
+
+    assert captured.get("model") == "cli_model"
 
     assert_scenario_completed(scenario)

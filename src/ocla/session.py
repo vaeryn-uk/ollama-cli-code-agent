@@ -15,7 +15,8 @@ from .config import (
     PROJECT_CONTEXT_FILE,
     SESSION_STORAGE_MODE,
     SESSION_STORAGE_MODE_PLAIN,
-    SESSION_STORAGE_MODE_COMPRESS, CONTEXT_WINDOW,
+    SESSION_STORAGE_MODE_COMPRESS,
+    CONTEXT_WINDOW,
 )
 
 from datetime import datetime
@@ -34,10 +35,11 @@ collaborator in the development process alongside them.
 
 
 class ContextWindowExceededError(RuntimeError):
-    exceeds_message : str
+    exceeds_message: str
 
     def __init__(self, exceeds_message: str):
         self.exceeds_message = exceeds_message
+
 
 def _encode_data(data: bytes, mode: str) -> bytes:
     """Encode *data* using the given *mode*."""
@@ -65,12 +67,16 @@ def _get_token_encoder(model: str | None) -> tiktoken.Encoding | None:
         except Exception:
             pass
 
-    logging.warning(f"Could not find a tokenizer for model {model}. Token counts maybe inaccurate. Falling back to cl100k_base")
+    logging.warning(
+        f"Could not find a tokenizer for model {model}. Token counts maybe inaccurate. Falling back to cl100k_base"
+    )
 
     try:
         return tiktoken.get_encoding("cl100k_base")
     except Exception:
-        logging.warning(f"Failed to load default tokenizer cl100k_base. Token counts maybe inaccurate")
+        logging.warning(
+            f"Failed to load default tokenizer cl100k_base. Token counts maybe inaccurate"
+        )
         return None
 
 
@@ -179,7 +185,9 @@ class Session:
         self.messages.append(message)
 
         if self.token_count() > int(CONTEXT_WINDOW.get()):
-            raise ContextWindowExceededError(f"Context window exceeded ({self.token_count()} / {CONTEXT_WINDOW.get()}). Please start a new session")
+            raise ContextWindowExceededError(
+                f"Context window exceeded ({self.token_count()} / {CONTEXT_WINDOW.get()}). Please start a new session"
+            )
 
         self.save()
 

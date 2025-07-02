@@ -1,10 +1,12 @@
 import argparse
+import os
 from curses.ascii import isdigit
 
 import humanize
 from datetime import datetime
 
 from ollama import Message, Client
+from ollama._types import ChatRequest
 from tzlocal import get_localzone
 
 from rich.table import Table
@@ -19,10 +21,13 @@ from ocla.config import (
     MODEL,
     LOG_LEVEL,
     CONFIG_VARS,
+    add_cli_args,
+    apply_cli_args,
     TOOL_PERMISSION_MODE,
     DISPLAY_THINKING,
     TOOL_PERMISSION_MODE_DEFAULT,
     TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
+    PROMPT_MODE,
 )
 from ocla.session import (
     Session,
@@ -30,13 +35,26 @@ from ocla.session import (
     set_current_session_name,
     get_current_session_name,
     generate_session_name,
-    session_exists, ContextWindowExceededError, load_session_meta,
+    session_exists,
+    ContextWindowExceededError,
+    load_session_meta,
 )
 from ocla.tools import ALL, ToolSecurity
 import ollama
-import sys
 
 _LOG_LEVEL = LOG_LEVEL.get()
+
+import signal
+import sys
+
+
+# No python stacktrace.
+def _quit_gracefully(signum, frame):
+    print()
+    sys.exit(130)
+
+
+signal.signal(signal.SIGINT, _quit_gracefully)
 
 # Skip application if we don't have a valid log level; we'll error out later in the CLI.
 if LOG_LEVEL.is_valid():
@@ -151,7 +169,10 @@ def _model_context_limit(model: str) -> int | None:
 
     for key in response.modelinfo:
         if "context_length" in key or "num_ctx" in key:
-            if isinstance(response.modelinfo[key], str) and response.modelinfo[key].isdigit():
+            if (
+                isinstance(response.modelinfo[key], str)
+                and response.modelinfo[key].isdigit()
+            ):
                 return int(response.modelinfo[key])
 
             if type(response.modelinfo[key]) is int:
@@ -217,7 +238,7 @@ def do_chat(session: Session, prompt: str) -> str:
         content, msg = _chat_stream(
             model=model,
             messages=session.messages,
-            tools=[t for t in ALL.values()],
+            tools=[t.describe() for t in ALL.values()],
         )
         session.add(msg)
         if content:
@@ -246,15 +267,10 @@ def do_chat(session: Session, prompt: str) -> str:
     session.save()
     info("")
 
-    info(f"session context usage {load_session_meta(session.name).usage_pct()}")
+    info("")
+    info(f"[ session context usage {load_session_meta(session.name).usage_pct()} ]")
 
     return "".join(accumulated_text)
-
-
-def read_prompt_from_stdin() -> str:
-    if sys.stdin.isatty():  # launched interactively with no pipe
-        return input("prompt> ")  # one-liner; could also loop for multi-turn
-    return sys.stdin.read()  # piped or redirected data
 
 
 def main(argv=None):
@@ -268,6 +284,8 @@ def main(argv=None):
         action="store_true",
     )
 
+    add_cli_args(parser)
+
     subparsers = parser.add_subparsers(dest="command")
 
     session_parser = subparsers.add_parser("session", help="Manage sessions")
@@ -280,8 +298,10 @@ def main(argv=None):
 
     subparsers.add_parser("config", help="Show config information")
     subparsers.add_parser("model", help="Show model information")
+    subparsers.add_parser("tools", help="Display tools made available to the agent")
 
     args, prompt_parts = parser.parse_known_args(argv)
+    apply_cli_args(args)
 
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():
@@ -289,7 +309,9 @@ def main(argv=None):
 
     model_ctx = _model_context_limit(MODEL.get())
     if model_ctx is None:
-        logging.warning(f"Could not determine model context limit from ollama for model {MODEL.get()}")
+        logging.warning(
+            f"Could not determine model context limit from ollama for model {MODEL.get()}"
+        )
 
     ctx_conf = int(CONTEXT_WINDOW.get())
 
@@ -378,10 +400,17 @@ def main(argv=None):
         table.add_column("value")
 
         table.add_row("Name", MODEL.get())
-        table.add_row("Context window (model max)", str(_model_context_limit(MODEL.get())) or "N/A")
+        table.add_row(
+            "Context window (model max)",
+            str(_model_context_limit(MODEL.get())) or "N/A",
+        )
         table.add_row("Context window (configured)", f"{CONTEXT_WINDOW.get()}")
 
         console.print(table)
+        return
+    elif args.command == "tools":
+        for t in ALL.values():
+            console.print(t.describe().model_dump(exclude_none=True))
         return
 
     session_name = get_current_session_name() or generate_session_name()
@@ -390,20 +419,39 @@ def main(argv=None):
         set_current_session_name(session_name)
         info(f"Created new session {session_name} and set it as the current session.")
 
-    # Treat remaining arguments as the prompt
-    msg = " ".join(prompt_parts).strip() or read_prompt_from_stdin().strip()
-    if not msg:
-        parser.error("No prompt supplied via arguments or stdin.")
-
     session = Session(session_name)
     if get_current_session_name() is None:
         set_current_session_name(session_name)
 
-    try:
-        do_chat(session, msg)
-    except ContextWindowExceededError as e:
-        error(e.exceeds_message)
-        return
+    # Treat remaining arguments as the prompt
+    msg = " ".join(prompt_parts).strip()
+    if not msg and not sys.stdin.isatty():
+        msg = sys.stdin.read().strip()
+
+    while True:
+        if not msg or len(msg) == 0:
+            detect_quit = False
+            if PROMPT_MODE.get() == "INTERACTIVE":
+                prompt_msg = "[bold cyan]prompt (q to quit) ❯[/bold cyan] "
+                detect_quit = True
+            else:
+                prompt_msg = "[bold cyan]prompt ❯[/bold cyan] "
+
+            msg = interactive_prompt(prompt_msg).strip()
+            if detect_quit and msg.lower() == "q":
+                break
+
+        if msg is not None and len(msg) > 0:
+            try:
+                do_chat(session, msg)
+            except ContextWindowExceededError as e:
+                error(e.exceeds_message)
+                return
+
+        if PROMPT_MODE.get() == "ONESHOT":
+            break
+
+        msg = None
 
 
 if __name__ == "__main__":
