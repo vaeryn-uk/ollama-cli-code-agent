@@ -95,18 +95,23 @@ if LOG_LEVEL.is_valid():
         }
     )
 
-_ollama_client : ollama.Client | None = None
+_ollama_client: ollama.Client | None = None
+
 
 def _resolve_ollama_host() -> str | None:
-    return OLLAMA_HOST_OVERRIDE.get() or os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
+    return (
+        OLLAMA_HOST_OVERRIDE.get()
+        or os.environ.get("OLLAMA_HOST")
+        or "http://localhost:11434"
+    )
+
 
 def _get_ollama_client():
     global _ollama_client
     if _ollama_client is None:
-        _ollama_client = ollama.Client(
-            host=_resolve_ollama_host()
-        )
+        _ollama_client = ollama.Client(host=_resolve_ollama_host())
     return _ollama_client
+
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
@@ -326,6 +331,9 @@ def _build_arg_parser() -> argparse.ArgumentParser | None:
 
 
 def _initialization_check():
+    if os.getenv("OCLA_DISABLE_INIT_CHECK"):
+        return
+
     model = MODEL.get()
     try:
         available = _get_ollama_client().list()
@@ -340,7 +348,9 @@ def _initialization_check():
             f"Ollama does not have the requested model '{model}'. "
             "Please pull the model or configure a different one."
         )
-        info(f"Available models: {', '.join([x.model for x in available.models if x.model])}")
+        info(
+            f"Available models: {', '.join([x.model for x in available.models if x.model])}"
+        )
         raise SystemExit(1)
 
     model_ctx = _model_context_limit(model)

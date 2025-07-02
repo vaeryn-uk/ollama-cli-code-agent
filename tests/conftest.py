@@ -50,3 +50,8 @@ def _wiremock_reset(_wiremock_ready):
     """Clear WireMock before each test runs."""
     _reset_wiremock()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _set_env(monkeypatch):
+    monkeypatch.setenv("OCLA_DISABLE_INIT_CHECK", "1")

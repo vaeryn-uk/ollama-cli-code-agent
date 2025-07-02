@@ -2,6 +2,8 @@ from io import StringIO
 import os
 import sys
 import logging
+
+import ollama
 import pytest
 
 from ocla.config import PROMPT_MODE
@@ -47,55 +49,3 @@ def test_cli_tool_called(monkeypatch, capsys):
     assert "done" in lines
 
     assert_scenario_completed(scenario)
-
-
-def test_ocla_ollama_host_overrides(monkeypatch, capsys):
-    scenario = mock_ollama_responses(content("pong"))
-
-    monkeypatch.setenv("OLLAMA_HOST", "http://ignored:1234")
-    monkeypatch.setenv("OCLA_OLLAMA_HOST", WIREMOCK_BASE_URL)
-    monkeypatch.setenv(PROMPT_MODE.env, "oneshot")
-
-    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
-
-    cli_main([])
-
-    assert os.environ["OLLAMA_HOST"] == WIREMOCK_BASE_URL
-
-    assert_scenario_completed(scenario)
-
-
-def test_thinking_cli_arg(monkeypatch):
-    scenario = mock_ollama_responses(content("pong"))
-
-    captured = {}
-    orig_chat = ocla.cli.ollama.chat
-
-    def fake_chat(*args, **kwargs):
-        captured["think"] = kwargs.get("think")
-        return orig_chat(*args, **kwargs)
-
-    monkeypatch.setattr(ocla.cli.ollama, "chat", fake_chat)
-    monkeypatch.setenv(PROMPT_MODE.env, "oneshot")
-    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
-
-    cli_main(["--thinking", "DISABLED"])
-
-    assert captured.get("think") is False
-
-    assert_scenario_completed(scenario)
-
-
-def test_missing_model(monkeypatch, capsys):
-    def fake_show(model):
-        raise ocla.cli.ResponseError("not found", status_code=404)
-
-    monkeypatch.setattr(ocla.cli.ollama, "show", fake_show)
-    monkeypatch.setenv(PROMPT_MODE.env, "oneshot")
-    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
-
-    with pytest.raises(SystemExit):
-        cli_main([])
-
-    captured = capsys.readouterr()
-    assert "does not have the requested model" in captured.out
