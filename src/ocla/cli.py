@@ -19,6 +19,8 @@ from ocla.config import (
     MODEL,
     LOG_LEVEL,
     CONFIG_VARS,
+    add_cli_args,
+    apply_cli_args,
     TOOL_PERMISSION_MODE,
     DISPLAY_THINKING,
     TOOL_PERMISSION_MODE_DEFAULT,
@@ -30,7 +32,9 @@ from ocla.session import (
     set_current_session_name,
     get_current_session_name,
     generate_session_name,
-    session_exists, ContextWindowExceededError, load_session_meta,
+    session_exists,
+    ContextWindowExceededError,
+    load_session_meta,
 )
 from ocla.tools import ALL, ToolSecurity
 import ollama
@@ -151,7 +155,10 @@ def _model_context_limit(model: str) -> int | None:
 
     for key in response.modelinfo:
         if "context_length" in key or "num_ctx" in key:
-            if isinstance(response.modelinfo[key], str) and response.modelinfo[key].isdigit():
+            if (
+                isinstance(response.modelinfo[key], str)
+                and response.modelinfo[key].isdigit()
+            ):
                 return int(response.modelinfo[key])
 
             if type(response.modelinfo[key]) is int:
@@ -268,6 +275,8 @@ def main(argv=None):
         action="store_true",
     )
 
+    add_cli_args(parser)
+
     subparsers = parser.add_subparsers(dest="command")
 
     session_parser = subparsers.add_parser("session", help="Manage sessions")
@@ -282,6 +291,7 @@ def main(argv=None):
     subparsers.add_parser("model", help="Show model information")
 
     args, prompt_parts = parser.parse_known_args(argv)
+    apply_cli_args(args)
 
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():
@@ -289,7 +299,9 @@ def main(argv=None):
 
     model_ctx = _model_context_limit(MODEL.get())
     if model_ctx is None:
-        logging.warning(f"Could not determine model context limit from ollama for model {MODEL.get()}")
+        logging.warning(
+            f"Could not determine model context limit from ollama for model {MODEL.get()}"
+        )
 
     ctx_conf = int(CONTEXT_WINDOW.get())
 
@@ -378,7 +390,10 @@ def main(argv=None):
         table.add_column("value")
 
         table.add_row("Name", MODEL.get())
-        table.add_row("Context window (model max)", str(_model_context_limit(MODEL.get())) or "N/A")
+        table.add_row(
+            "Context window (model max)",
+            str(_model_context_limit(MODEL.get())) or "N/A",
+        )
         table.add_row("Context window (configured)", f"{CONTEXT_WINDOW.get()}")
 
         console.print(table)

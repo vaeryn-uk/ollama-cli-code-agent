@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import dataclasses
@@ -5,6 +6,7 @@ import json
 from typing import Optional, Callable
 
 _have_logged_invalid_config = False
+_cli_values: dict[str, str] = {}
 
 
 @dataclasses.dataclass
@@ -16,9 +18,13 @@ class ConfigVar:
     default: Optional[str] = None
     validator_fn: Optional[Callable[[Optional[str]], str]] = None
     allowed_values: Optional[dict[str, str]] = None
+    cli: Optional[tuple[str, ...]] = None
 
     def get(self) -> str:
         global _have_logged_invalid_config
+
+        if self.name in _cli_values:
+            return _cli_values[self.name]
 
         if self.env and os.environ.get(self.env):
             return os.environ.get(self.env)
@@ -54,6 +60,33 @@ class ConfigVar:
 CONFIG_VARS: dict[str, ConfigVar] = {}
 
 
+def set_cli_overrides(values: dict[str, str]) -> None:
+    """Store command-line overrides for later retrieval."""
+    _cli_values.update(values)
+
+
+def add_cli_args(parser: argparse.ArgumentParser) -> None:
+    """Register CLI arguments for all config variables that define them."""
+    for var in CONFIG_VARS.values():
+        if var.cli:
+            parser.add_argument(
+                *var.cli,
+                dest=var.name,
+                help=var.description,
+                default=argparse.SUPPRESS,
+                choices=list(var.allowed_values.keys()) if var.allowed_values else None,
+            )
+
+
+def apply_cli_args(args: argparse.Namespace) -> None:
+    """Apply overrides from *args* returned by argparse."""
+    overrides: dict[str, str] = {}
+    for var in CONFIG_VARS.values():
+        if var.cli and hasattr(args, var.name):
+            overrides[var.name] = getattr(args, var.name)
+    set_cli_overrides(overrides)
+
+
 def _var(var: ConfigVar) -> ConfigVar:
     CONFIG_VARS[var.name] = var
     return var
@@ -76,7 +109,9 @@ CONTEXT_WINDOW = _var(
         env="OCLA_CONTEXT_WINDOW",
         config_file_property="contextWindow",
         default=str(8192 * 2),
-        validator_fn=lambda x: "" if x.isdigit() and int(x) > 0 else "must be a positive integer",
+        validator_fn=lambda x: (
+            "" if x.isdigit() and int(x) > 0 else "must be a positive integer"
+        ),
     )
 )
 
@@ -87,6 +122,7 @@ MODEL = _var(
         env="OCLA_MODEL",
         config_file_property="model",
         default="qwen3",
+        cli=("-m", "--model"),
     )
 )
 
