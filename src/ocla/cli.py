@@ -426,17 +426,21 @@ def main(argv=None):
         table.add_column("value")
 
         table.add_row("Name", MODEL.get())
+
+        table.add_section()
         table.add_row(
-            "Context window (model max)",
+            "Model maximum context window",
             str(_model_context_limit(MODEL.get())) or "N/A",
         )
-        table.add_row("Context window (configured)", f"{CONTEXT_WINDOW.get()}")
+        table.add_row("Current configured context window", f"{CONTEXT_WINDOW.get()}")
+
+        table.add_section()
         supported = _model_supports_thinking(MODEL.get())
         table.add_row(
-            "Supports thinking",
+            "Model supports thinking?",
             "N/A" if supported is None else str(supported),
         )
-        table.add_row("Thinking setting", THINKING.get())
+        table.add_row("Current thinking setting", THINKING.get())
 
         console.print(table)
         return
