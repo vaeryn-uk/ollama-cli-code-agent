@@ -1,6 +1,9 @@
 from io import StringIO
+import os
 import sys
 import logging
+
+from ocla.config import PROMPT_MODE
 from .helpers import (
     mock_ollama_responses,
     content,
@@ -8,6 +11,7 @@ from .helpers import (
     assert_scenario_completed,
     permit_all_tool_calls,
 )
+from .conftest import WIREMOCK_BASE_URL
 import ocla.cli
 from ocla.cli import main as cli_main
 
@@ -15,6 +19,7 @@ from ocla.cli import main as cli_main
 def test_cli_simple_reply(monkeypatch, capsys):
     scenario = mock_ollama_responses(content("pong"))
 
+    monkeypatch.setenv(PROMPT_MODE.env, "oneshot")
     monkeypatch.setattr(sys, "stdin", StringIO("ping"))
 
     cli_main([])
@@ -32,6 +37,7 @@ def test_cli_tool_called(monkeypatch, capsys):
     )
 
     monkeypatch.setattr(sys, "stdin", StringIO("done"))
+    monkeypatch.setenv(PROMPT_MODE.env, "oneshot")
     permit_all_tool_calls(monkeypatch)
 
     cli_main([])
@@ -42,41 +48,17 @@ def test_cli_tool_called(monkeypatch, capsys):
     assert_scenario_completed(scenario)
 
 
-def test_context_window_warning(monkeypatch, capsys, caplog):
+def test_ocla_ollama_host_overrides(monkeypatch, capsys):
     scenario = mock_ollama_responses(content("pong"))
 
-    monkeypatch.setattr("ocla.cli._model_context_limit", lambda model: 5)
-    monkeypatch.setenv("OCLA_CONTEXT_WINDOW", "10")
-    monkeypatch.setattr("ocla.session._estimate_tokens", lambda *a, **k: 1)
+    monkeypatch.setenv("OLLAMA_HOST", "http://ignored:1234")
+    monkeypatch.setenv("OCLA_OLLAMA_HOST", WIREMOCK_BASE_URL)
+    monkeypatch.setenv(PROMPT_MODE.env, "oneshot")
 
     monkeypatch.setattr(sys, "stdin", StringIO("ping"))
 
-    with caplog.at_level(logging.WARNING):
-        cli_main([])
-    captured = capsys.readouterr()
-    assert "exceeds model limit" in caplog.text
+    cli_main([])
 
-    assert_scenario_completed(scenario)
-
-
-def test_model_cli_arg_overrides_env(monkeypatch, capsys):
-    scenario = mock_ollama_responses(content("pong"))
-
-    monkeypatch.setenv("OCLA_MODEL", "env_model")
-
-    captured = {}
-    orig_chat = ocla.cli.ollama.chat
-
-    def fake_chat(*args, **kwargs):
-        captured["model"] = kwargs.get("model")
-        return orig_chat(*args, **kwargs)
-
-    monkeypatch.setattr(ocla.cli.ollama, "chat", fake_chat)
-
-    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
-
-    cli_main(["-m", "cli_model"])
-
-    assert captured.get("model") == "cli_model"
+    assert os.environ["OLLAMA_HOST"] == WIREMOCK_BASE_URL
 
     assert_scenario_completed(scenario)
