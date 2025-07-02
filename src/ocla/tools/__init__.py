@@ -22,7 +22,9 @@ class Tool(abc.ABC):
     description: str
 
     def __init__(self) -> None:
-        self.name = getattr(self, "name", None) or pascal_to_snake(self.__class__.__name__)
+        self.name = getattr(self, "name", None) or pascal_to_snake(
+            self.__class__.__name__
+        )
 
     def describe(self) -> OllamaTool:
         out = convert_function_to_tool(self.execute)
@@ -31,11 +33,9 @@ class Tool(abc.ABC):
         out.function.description = self.description
         return out
 
-
     @abc.abstractmethod
     def execute(self, *args, **kwargs) -> (typing.Any, str):
         pass
-
 
     def prompt(self, call: Message.ToolCall, yes_no: str) -> str:
         return f"Run tool '{self.name}'? Arguments: {truncate(format_tool_arguments(call), 50)} {yes_no}"

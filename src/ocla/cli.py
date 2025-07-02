@@ -451,7 +451,6 @@ def main(argv=None):
         if PROMPT_MODE.get() == "ONESHOT":
             break
 
-
         msg = None
 
 
