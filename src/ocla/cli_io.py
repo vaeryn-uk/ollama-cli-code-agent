@@ -40,9 +40,12 @@ def interactive_prompt(prompt: str) -> Optional[str]:
     tty_name = _TTY_WIN if os.name == "nt" else _TTY_NIX
     try:
         with open(tty_name, "r") as tty_in, open(tty_name, "w") as tty_out:
-            tty_out.write(prompt)
-            tty_out.flush()
-            reply = tty_in.readline()
+            fd_console = Console(file=tty_out, force_terminal=True)
+
+            fd_console.print(prompt, end="")  # emits ANSI codes, not markup
+            fd_console.file.flush()  # make sure it appears immediately
+
+            reply = tty_in.readline().rstrip("\n")
         return reply
     except OSError:
         # No terminal (cron, CI, docker without TTY, etc.)

@@ -15,6 +15,7 @@ your terminal.
 | `log_level` | `N/A` | `OCLA_LOG_LEVEL` | `logLevel` | `WARNING` | Log level (`CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`) |
 | `model` | `-m --model` | `OCLA_MODEL` | `model` | `qwen3` | Model name |
 | `project_context_file` | `N/A` | `OCLA_PROJECT_CONTEXT_FILE` | `projectContextFiles` | `AGENTS.md` | the relative path to a file that gives ocla more context about your project (case-insensitive) |
+| `prompt_mode` | `-p --prompt-mode` | `OCLA_SESSION_STORAGE_MODE` | `promptMode` | `INTERACTIVE` | How you want to interact with the assistant (`ONESHOT`: The program quits after a single prompt, `INTERACTIVE`: You issue prompts until quit) |
 | `session_dir` | `N/A` | `OCLA_SESSION_DIR` | `sessionDir` | `./.ocla/sessions` | Path to the session directory |
 | `session_storage_mode` | `N/A` | `OCLA_SESSION_STORAGE_MODE` | `sessionStorageMode` | `COMPRESS` | how we store session data on disk (`PLAIN`: Plain text (JSON). Can get large., `COMPRESS`: Compressed via gzip) |
 | `state_file` | `N/A` | `OCLA_STATE_FILE` | `stateFile` | `./.ocla/state.json` | Path to the state file |
