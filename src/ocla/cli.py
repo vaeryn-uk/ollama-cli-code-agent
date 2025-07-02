@@ -389,7 +389,7 @@ def main(argv=None):
             Session(name).save()
             set_current_session_name(name)
             print(name)
-        elif args.session_cmd == "list":
+        elif args.session_cmd == "list" or not args.session_cmd:
             table = Table(show_header=True, header_style="bold")
 
             table.add_column("Session")
