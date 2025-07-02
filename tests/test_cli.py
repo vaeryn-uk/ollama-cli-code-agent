@@ -2,6 +2,7 @@ from io import StringIO
 import os
 import sys
 import logging
+import pytest
 
 from ocla.config import PROMPT_MODE
 from .helpers import (
@@ -83,3 +84,18 @@ def test_thinking_cli_arg(monkeypatch):
     assert captured.get("think") is False
 
     assert_scenario_completed(scenario)
+
+
+def test_missing_model(monkeypatch, capsys):
+    def fake_show(model):
+        raise ocla.cli.ResponseError("not found", status_code=404)
+
+    monkeypatch.setattr(ocla.cli.ollama, "show", fake_show)
+    monkeypatch.setenv(PROMPT_MODE.env, "oneshot")
+    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
+
+    with pytest.raises(SystemExit):
+        cli_main([])
+
+    captured = capsys.readouterr()
+    assert "does not have the requested model" in captured.out

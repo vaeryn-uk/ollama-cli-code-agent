@@ -5,7 +5,7 @@ from curses.ascii import isdigit
 import humanize
 from datetime import datetime
 
-from ollama import Message, Client
+from ollama import Message, Client, ResponseError
 from ollama._types import ChatRequest
 from tzlocal import get_localzone
 
@@ -316,7 +316,20 @@ def _build_arg_parser() -> argparse.ArgumentParser | None:
 
 
 def _initialization_check():
-    model_ctx = _model_context_limit(MODEL.get())
+    model = MODEL.get()
+    try:
+        ollama.show(model)
+    except ResponseError:
+        error(
+            f"Ollama does not have the requested model '{model}'. "
+            "Please pull the model or configure a different one."
+        )
+        raise SystemExit(1)
+    except ConnectionError as e:
+        error(str(e))
+        raise SystemExit(1)
+
+    model_ctx = _model_context_limit(model)
     if model_ctx is None:
         logging.warning(
             f"Could not determine model context limit from ollama for model {MODEL.get()}"

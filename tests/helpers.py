@@ -75,4 +75,22 @@ def mock_ollama_responses(
         with urlopen(req):
             pass
 
+    # also stub /api/show so initialization succeeds
+    show_mapping = {
+        "request": {"method": "POST", "urlPath": "/api/show"},
+        "response": {
+            "status": 200,
+            "jsonBody": {"model_info": {"num_ctx": 8192}},
+            "headers": {"Content-Type": "application/json"},
+        },
+    }
+    req = Request(
+        f"{WIREMOCK_BASE_URL.rstrip('/')}/__admin/mappings",
+        data=json.dumps(show_mapping).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(req):
+        pass
+
     return scenario
