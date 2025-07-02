@@ -75,7 +75,7 @@ def test_thinking_cli_arg(monkeypatch):
         return orig_chat(*args, **kwargs)
 
     monkeypatch.setattr(ocla.cli.ollama, "chat", fake_chat)
-
+    monkeypatch.setenv(PROMPT_MODE.env, "oneshot")
     monkeypatch.setattr(sys, "stdin", StringIO("ping"))
 
     cli_main(["--thinking", "DISABLED"])

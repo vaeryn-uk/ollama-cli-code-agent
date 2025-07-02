@@ -209,9 +209,9 @@ THINKING_ENABLED = "ENABLED"
 THINKING = _var(
     ConfigVar(
         name="thinking",
-        description="How to display assistant thinking output",
+        description="Enable & show model thinking, if supported.",
         env="OCLA_THINKING",
-        config_file_property="displayThinking",
+        config_file_property="thinking",
         default=THINKING_ENABLED,
         normalizer=lambda x: x.upper(),
         allowed_values={

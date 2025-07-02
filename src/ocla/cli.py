@@ -198,12 +198,12 @@ def _model_supports_thinking(model: str) -> bool | None:
 
 
 def _chat_stream(**kwargs) -> tuple[str, Message]:
-    content_parts: list[str] = []
+    full_content: str = ""
+    full_thinking: str = ""
     tool_calls: list[ollama.Message.ToolCall] = []  # gather all tool calls
     last_role: str | None = None  # keep whatever role we see last
 
-    thinking = False
-    thinking_mode = THINKING.get().upper()
+    thinking_mode = THINKING.get()
     enable_think = thinking_mode != THINKING_DISABLED
     show_thinking = thinking_mode == THINKING_ENABLED
 
@@ -216,32 +216,23 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
         msg = chunk.get("message", {})
         last_role = msg.get("role", last_role)
 
-        part = msg.get("content") or ""
+        if part := msg.get("content"):
+            full_thinking += part
+            agent_output(part, thinking=False, end="")
 
-        if part:
-            content_parts.append(part)
-            output = True
-
-            if part == "<think>":
-                thinking = True
-                output = False
-
-            if thinking and part == "</think>":
-                thinking = False
-                output = False
-
-            if output and (show_thinking or not thinking):
-                agent_output(part, thinking=thinking, end="")
+        if part := msg.get("thinking"):
+            full_thinking += part
+            if show_thinking:
+                agent_output(part, thinking=True, end="")
 
         if "tool_calls" in msg:
             tool_calls.extend(msg["tool_calls"])
-
-    full_content = "".join(content_parts)
 
     # Build a consolidated assistant message
     assistant_msg = Message(
         role=last_role or "assistant",
         content=full_content,
+        thinking=full_thinking,
         tool_calls=tool_calls,
     )
 
