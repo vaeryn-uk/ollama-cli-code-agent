@@ -273,6 +273,7 @@ def do_chat(session: Session, prompt: str) -> str:
 
     return "".join(accumulated_text)
 
+
 def _build_arg_parser() -> argparse.ArgumentParser | None:
     parser = argparse.ArgumentParser(
         description="Interact with a local Ollama model",
@@ -302,6 +303,7 @@ def _build_arg_parser() -> argparse.ArgumentParser | None:
 
     return parser
 
+
 def _initialization_check():
     model_ctx = _model_context_limit(MODEL.get())
     if model_ctx is None:
@@ -318,6 +320,7 @@ def _initialization_check():
             model_ctx,
         )
 
+
 def main(argv=None):
     parser = _build_arg_parser()
 
@@ -330,7 +333,9 @@ def main(argv=None):
 
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():
-            parser.error(f"Invalid value for {var.name}: {validation_err}")
+            parser.error(
+                f"Invalid value for {var.name} ({var.get()}): {validation_err}"
+            )
 
     _initialization_check()
 
@@ -434,7 +439,7 @@ def main(argv=None):
         set_current_session_name(session_name)
 
     # Take prompt from stdin if provided.
-    msg = None if not sys.stdin.isatty() else sys.stdin.read().strip()
+    msg = None if sys.stdin.isatty() else sys.stdin.read().strip()
 
     while True:
         if not msg or len(msg) == 0:
