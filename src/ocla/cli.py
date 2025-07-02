@@ -417,7 +417,9 @@ def main(argv=None):
         set_current_session_name(session_name)
 
     # Treat remaining arguments as the prompt
-    msg = " ".join(prompt_parts).strip() or sys.stdin.read()
+    msg = " ".join(prompt_parts).strip()
+    if not msg and not sys.stdin.isatty():
+        msg = sys.stdin.read().strip()
 
     while True:
         if not msg or len(msg) == 0:
