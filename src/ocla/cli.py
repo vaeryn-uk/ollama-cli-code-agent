@@ -27,6 +27,7 @@ from ocla.config import (
     DISPLAY_THINKING,
     TOOL_PERMISSION_MODE_DEFAULT,
     TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
+    OLLAMA_HOST_OVERRIDE,
     PROMPT_MODE,
 )
 from ocla.session import (
@@ -302,6 +303,10 @@ def main(argv=None):
 
     args, prompt_parts = parser.parse_known_args(argv)
     apply_cli_args(args)
+
+    host_override = OLLAMA_HOST_OVERRIDE.get()
+    if host_override:
+        os.environ["OLLAMA_HOST"] = host_override
 
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():

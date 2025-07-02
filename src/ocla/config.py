@@ -129,6 +129,16 @@ MODEL = _var(
     )
 )
 
+OLLAMA_HOST_OVERRIDE = _var(
+    ConfigVar(
+        name="ollama_host",
+        description="Override the OLLAMA_HOST for the Ollama API",
+        env="OCLA_OLLAMA_HOST",
+        config_file_property="ollamaHost",
+        default=None,
+    )
+)
+
 LOG_LEVEL = _var(
     ConfigVar(
         name="log_level",

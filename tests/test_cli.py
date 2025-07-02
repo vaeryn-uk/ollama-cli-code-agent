@@ -1,4 +1,5 @@
 from io import StringIO
+import os
 import sys
 import logging
 from .helpers import (
@@ -8,6 +9,7 @@ from .helpers import (
     assert_scenario_completed,
     permit_all_tool_calls,
 )
+from .conftest import WIREMOCK_BASE_URL
 import ocla.cli
 from ocla.cli import main as cli_main
 
@@ -78,5 +80,20 @@ def test_model_cli_arg_overrides_env(monkeypatch, capsys):
     cli_main(["-m", "cli_model"])
 
     assert captured.get("model") == "cli_model"
+
+    assert_scenario_completed(scenario)
+
+
+def test_ocla_ollama_host_overrides(monkeypatch, capsys):
+    scenario = mock_ollama_responses(content("pong"))
+
+    monkeypatch.setenv("OLLAMA_HOST", "http://ignored:1234")
+    monkeypatch.setenv("OCLA_OLLAMA_HOST", WIREMOCK_BASE_URL)
+
+    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
+
+    cli_main([])
+
+    assert os.environ["OLLAMA_HOST"] == WIREMOCK_BASE_URL
 
     assert_scenario_completed(scenario)
