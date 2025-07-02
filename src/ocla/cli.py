@@ -24,7 +24,9 @@ from ocla.config import (
     add_cli_args,
     apply_cli_args,
     TOOL_PERMISSION_MODE,
-    DISPLAY_THINKING,
+    THINKING,
+    THINKING_DISABLED,
+    THINKING_ENABLED,
     TOOL_PERMISSION_MODE_DEFAULT,
     TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
     PROMPT_MODE,
@@ -181,16 +183,34 @@ def _model_context_limit(model: str) -> int | None:
     return None
 
 
+def _model_supports_thinking(model: str) -> bool | None:
+    try:
+        response = ollama.show(model)
+    except Exception as e:
+        logging.debug(f"failed to query model info: {e}")
+        return None
+
+    if response.capabilities and "thinking" in response.capabilities:
+        return True
+
+    return False
+
+
 def _chat_stream(**kwargs) -> tuple[str, Message]:
     content_parts: list[str] = []
     tool_calls: list[ollama.Message.ToolCall] = []  # gather all tool calls
     last_role: str | None = None  # keep whatever role we see last
 
     thinking = False
-    show_thinking = DISPLAY_THINKING.get().lower() != "false"
+    thinking_mode = THINKING.get().upper()
+    enable_think = thinking_mode != THINKING_DISABLED
+    show_thinking = thinking_mode == THINKING_ENABLED
 
     for chunk in ollama.chat(
-        stream=True, options={"num_ctx": int(CONTEXT_WINDOW.get())}, **kwargs
+        stream=True,
+        think=enable_think,
+        options={"num_ctx": int(CONTEXT_WINDOW.get())},
+        **kwargs,
     ):
         msg = chunk.get("message", {})
         last_role = msg.get("role", last_role)
@@ -303,6 +323,12 @@ def main(argv=None):
     args, prompt_parts = parser.parse_known_args(argv)
     apply_cli_args(args)
 
+    if not sys.stdin.isatty() and not prompt_parts:
+        # Automatically run in ONESHOT mode when input is piped
+        from ocla.config import _cli_values, PROMPT_MODE
+
+        _cli_values[PROMPT_MODE.name] = "ONESHOT"
+
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():
             parser.error(f"Invalid value for {var.name}: {validation_err}")
@@ -405,6 +431,12 @@ def main(argv=None):
             str(_model_context_limit(MODEL.get())) or "N/A",
         )
         table.add_row("Context window (configured)", f"{CONTEXT_WINDOW.get()}")
+        supported = _model_supports_thinking(MODEL.get())
+        table.add_row(
+            "Supports thinking",
+            "N/A" if supported is None else str(supported),
+        )
+        table.add_row("Thinking setting", THINKING.get())
 
         console.print(table)
         return

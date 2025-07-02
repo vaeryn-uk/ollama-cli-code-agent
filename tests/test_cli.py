@@ -80,3 +80,24 @@ def test_model_cli_arg_overrides_env(monkeypatch, capsys):
     assert captured.get("model") == "cli_model"
 
     assert_scenario_completed(scenario)
+
+
+def test_thinking_cli_arg(monkeypatch):
+    scenario = mock_ollama_responses(content("pong"))
+
+    captured = {}
+    orig_chat = ocla.cli.ollama.chat
+
+    def fake_chat(*args, **kwargs):
+        captured["think"] = kwargs.get("think")
+        return orig_chat(*args, **kwargs)
+
+    monkeypatch.setattr(ocla.cli.ollama, "chat", fake_chat)
+
+    monkeypatch.setattr(sys, "stdin", StringIO("ping"))
+
+    cli_main(["--thinking", "DISABLED"])
+
+    assert captured.get("think") is False
+
+    assert_scenario_completed(scenario)
