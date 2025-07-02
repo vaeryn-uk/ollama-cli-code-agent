@@ -1,12 +1,10 @@
 import argparse
 import os
-from curses.ascii import isdigit
 
 import humanize
 from datetime import datetime
 
-from ollama import Message, Client, ResponseError
-from ollama._types import ChatRequest
+from ollama import Message, ResponseError
 from tzlocal import get_localzone
 
 from rich.table import Table
@@ -97,6 +95,18 @@ if LOG_LEVEL.is_valid():
         }
     )
 
+_ollama_client : ollama.Client | None = None
+
+def _resolve_ollama_host() -> str | None:
+    return OLLAMA_HOST_OVERRIDE.get() or os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
+
+def _get_ollama_client():
+    global _ollama_client
+    if _ollama_client is None:
+        _ollama_client = ollama.Client(
+            host=_resolve_ollama_host()
+        )
+    return _ollama_client
 
 def execute_tool(call: ollama.Message.ToolCall) -> str:
     entry = ALL.get(call.function.name)
@@ -165,7 +175,7 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
 
 def _model_context_limit(model: str) -> int | None:
     try:
-        response = ollama.show(model)
+        response = _get_ollama_client().show(model)
     except Exception as e:
         logging.debug(f"failed to query model info: {e}")
         return None
@@ -184,9 +194,9 @@ def _model_context_limit(model: str) -> int | None:
     return None
 
 
-def _model_supports_thinking(model: str) -> bool | None:
+def _model_supports_thinking() -> bool | None:
     try:
-        response = ollama.show(model)
+        response = _get_ollama_client().show(MODEL.get())
     except Exception as e:
         logging.debug(f"failed to query model info: {e}")
         return None
@@ -204,10 +214,10 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
     last_role: str | None = None  # keep whatever role we see last
 
     thinking_mode = THINKING.get()
-    enable_think = thinking_mode != THINKING_DISABLED
+    enable_think = thinking_mode != THINKING_DISABLED and _model_supports_thinking()
     show_thinking = thinking_mode == THINKING_ENABLED
 
-    for chunk in ollama.chat(
+    for chunk in _get_ollama_client().chat(
         stream=True,
         think=enable_think,
         options={"num_ctx": int(CONTEXT_WINDOW.get())},
@@ -318,15 +328,19 @@ def _build_arg_parser() -> argparse.ArgumentParser | None:
 def _initialization_check():
     model = MODEL.get()
     try:
-        ollama.show(model)
+        available = _get_ollama_client().list()
+    except (ResponseError, ConnectionError):
+        error(f"Cannot connect to Ollama at {_resolve_ollama_host()}. Is it running?")
+        raise SystemExit(1)
+
+    try:
+        _get_ollama_client().show(model)
     except ResponseError:
         error(
             f"Ollama does not have the requested model '{model}'. "
             "Please pull the model or configure a different one."
         )
-        raise SystemExit(1)
-    except ConnectionError as e:
-        error(str(e))
+        info(f"Available models: {', '.join([x.model for x in available.models if x.model])}")
         raise SystemExit(1)
 
     model_ctx = _model_context_limit(model)
@@ -350,10 +364,6 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     apply_cli_args(args)
-
-    host_override = OLLAMA_HOST_OVERRIDE.get()
-    if host_override:
-        os.environ["OLLAMA_HOST"] = host_override
 
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():
@@ -448,7 +458,7 @@ def main(argv=None):
         table.add_row("Current configured context window", f"{CONTEXT_WINDOW.get()}")
 
         table.add_section()
-        supported = _model_supports_thinking(MODEL.get())
+        supported = _model_supports_thinking()
         table.add_row(
             "Model supports thinking?",
             "N/A" if supported is None else str(supported),

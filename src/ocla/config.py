@@ -137,7 +137,7 @@ OLLAMA_HOST_OVERRIDE = _var(
         description="Override the OLLAMA_HOST for the Ollama API",
         env="OCLA_OLLAMA_HOST",
         config_file_property="ollamaHost",
-        default=None,
+        default="",
     )
 )
 
