@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Update README with a table of config vars."""
+"""Update README with a section for each config var."""
 from pathlib import Path
 import importlib.util
 import sys
@@ -17,8 +17,6 @@ END_MARKER = "<!-- CONFIG_TABLE_END -->"
 
 
 def generate_table() -> str:
-    header = "| Name | CLI | Env | Config file | Default | Description |"
-    sep = "| --- | --- | --- | --- | --- | --- |"
     rows = []
     for name, var in sorted(config.CONFIG_VARS.items()):
         env = var.env or "N/A"
@@ -31,10 +29,21 @@ def generate_table() -> str:
                 f"`{k}`: {v}" if v else f"`{k}`" for k, v in var.allowed_values.items()
             )
             desc = f"{desc} ({allowed})"
+
         rows.append(
-            f"| `{name}` | `{cli}` | `{env}` | `{prop}` | `{default}` | {desc} |"
+            "\n".join(
+                [
+                    f"### `{name}`",
+                    f"- **CLI:** `{cli}`",
+                    f"- **Env:** `{env}`",
+                    f"- **Config file:** `{prop}`",
+                    f"- **Default:** `{default}`",
+                    f"- **Description:** {desc}",
+                    "",
+                ]
+            )
         )
-    return "\n".join([header, sep] + rows)
+    return "\n".join(rows)
 
 
 def update_readme(path: Path) -> None:
