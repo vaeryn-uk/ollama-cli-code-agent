@@ -3,7 +3,8 @@ import enum
 import inspect
 import json
 import typing
-from ollama import Message
+from ollama import Message, Tool as OllamaTool
+from ollama._utils import convert_function_to_tool
 
 from ..util import pascal_to_snake, format_tool_arguments, truncate
 
@@ -18,19 +19,23 @@ class Tool(abc.ABC):
 
     name: str
     security: ToolSecurity = ToolSecurity.ASK
+    description: str
 
     def __init__(self) -> None:
-        self.name = pascal_to_snake(self.__class__.__name__)
+        self.name = getattr(self, "name", None) or pascal_to_snake(self.__class__.__name__)
 
-        # ``ollama`` relies on ``__name__`` and ``inspect.signature`` when a
-        # callable is passed in as a tool.  We provide both so that instances of
-        # ``Tool`` subclasses behave like regular functions.
-        self.__name__ = self.name
-        self.__signature__ = inspect.signature(self.execute)
+    def describe(self) -> OllamaTool:
+        out = convert_function_to_tool(self.execute)
+        out.function.name = self.name
+        assert self.description, f"tool {type(self)} does not have a description"
+        out.function.description = self.description
+        return out
+
 
     @abc.abstractmethod
     def execute(self, *args, **kwargs) -> (typing.Any, str):
-        """Execute the tool."""
+        pass
+
 
     def prompt(self, call: Message.ToolCall, yes_no: str) -> str:
         return f"Run tool '{self.name}'? Arguments: {truncate(format_tool_arguments(call), 50)} {yes_no}"

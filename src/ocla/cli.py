@@ -1,10 +1,12 @@
 import argparse
+import os
 from curses.ascii import isdigit
 
 import humanize
 from datetime import datetime
 
 from ollama import Message, Client
+from ollama._types import ChatRequest
 from tzlocal import get_localzone
 
 from rich.table import Table
@@ -236,7 +238,7 @@ def do_chat(session: Session, prompt: str) -> str:
         content, msg = _chat_stream(
             model=model,
             messages=session.messages,
-            tools=[t for t in ALL.values()],
+            tools=[t.describe() for t in ALL.values()],
         )
         session.add(msg)
         if content:
@@ -296,6 +298,7 @@ def main(argv=None):
 
     subparsers.add_parser("config", help="Show config information")
     subparsers.add_parser("model", help="Show model information")
+    subparsers.add_parser("tools", help="Display tools made available to the agent")
 
     args, prompt_parts = parser.parse_known_args(argv)
     apply_cli_args(args)
@@ -405,6 +408,10 @@ def main(argv=None):
 
         console.print(table)
         return
+    elif args.command == "tools":
+        for t in ALL.values():
+            console.print(t.describe().model_dump(exclude_none=True))
+        return
 
     session_name = get_current_session_name() or generate_session_name()
     if args.new_session:
@@ -443,6 +450,7 @@ def main(argv=None):
 
         if PROMPT_MODE.get() == "ONESHOT":
             break
+
 
         msg = None
 
