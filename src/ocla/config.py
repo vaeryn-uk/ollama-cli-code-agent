@@ -75,6 +75,8 @@ def add_cli_args(parser: argparse.ArgumentParser) -> None:
                 dest=var.name,
                 help=var.description,
                 default=argparse.SUPPRESS,
+                type=lambda x: x if var.normalizer is None else var.normalizer(x),
+                choices=list(var.allowed_values.keys()) if var.allowed_values else None,
             )
 
 
