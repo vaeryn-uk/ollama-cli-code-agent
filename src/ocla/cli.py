@@ -25,6 +25,7 @@ from ocla.config import (
     DISPLAY_THINKING,
     TOOL_PERMISSION_MODE_DEFAULT,
     TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
+    PROMPT_MODE,
 )
 from ocla.session import (
     Session,
@@ -38,9 +39,20 @@ from ocla.session import (
 )
 from ocla.tools import ALL, ToolSecurity
 import ollama
-import sys
 
 _LOG_LEVEL = LOG_LEVEL.get()
+
+import signal
+import sys
+
+
+# No python stacktrace.
+def _quit_gracefully(signum, frame):
+    print()
+    sys.exit(130)
+
+
+signal.signal(signal.SIGINT, _quit_gracefully)
 
 # Skip application if we don't have a valid log level; we'll error out later in the CLI.
 if LOG_LEVEL.is_valid():
@@ -253,15 +265,10 @@ def do_chat(session: Session, prompt: str) -> str:
     session.save()
     info("")
 
-    info(f"session context usage {load_session_meta(session.name).usage_pct()}")
+    info("")
+    info(f"[ session context usage {load_session_meta(session.name).usage_pct()} ]")
 
     return "".join(accumulated_text)
-
-
-def read_prompt_from_stdin() -> str:
-    if sys.stdin.isatty():  # launched interactively with no pipe
-        return input("prompt> ")  # one-liner; could also loop for multi-turn
-    return sys.stdin.read()  # piped or redirected data
 
 
 def main(argv=None):
@@ -405,20 +412,37 @@ def main(argv=None):
         set_current_session_name(session_name)
         info(f"Created new session {session_name} and set it as the current session.")
 
-    # Treat remaining arguments as the prompt
-    msg = " ".join(prompt_parts).strip() or read_prompt_from_stdin().strip()
-    if not msg:
-        parser.error("No prompt supplied via arguments or stdin.")
-
     session = Session(session_name)
     if get_current_session_name() is None:
         set_current_session_name(session_name)
 
-    try:
-        do_chat(session, msg)
-    except ContextWindowExceededError as e:
-        error(e.exceeds_message)
-        return
+    # Treat remaining arguments as the prompt
+    msg = " ".join(prompt_parts).strip()
+
+    while True:
+        if not msg or len(msg) == 0:
+            detect_quit = False
+            if PROMPT_MODE.get() == "INTERACTIVE":
+                prompt_msg = "[bold cyan]prompt (q to quit) ❯[/bold cyan] "
+                detect_quit = True
+            else:
+                prompt_msg = "[bold cyan]prompt ❯[/bold cyan] "
+
+            msg = interactive_prompt(prompt_msg).strip()
+            if detect_quit and msg.lower() == "q":
+                break
+
+        if msg is not None and len(msg) > 0:
+            try:
+                do_chat(session, msg)
+            except ContextWindowExceededError as e:
+                error(e.exceeds_message)
+                return
+
+        if PROMPT_MODE.get() == "ONESHOT":
+            break
+
+        msg = None
 
 
 if __name__ == "__main__":

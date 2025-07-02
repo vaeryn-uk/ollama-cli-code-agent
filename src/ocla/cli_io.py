@@ -34,7 +34,7 @@ def error(text: str, con=None, **kwargs) -> None:
 def interactive_prompt(prompt: str) -> Optional[str]:
     # 1. Fast path – stdin is already a TTY
     if sys.stdin.isatty():
-        return input(prompt)
+        return console.input(prompt)
 
     # 2. Try to open the controlling terminal directly
     tty_name = _TTY_WIN if os.name == "nt" else _TTY_NIX

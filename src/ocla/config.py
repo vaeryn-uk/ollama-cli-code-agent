@@ -17,31 +17,37 @@ class ConfigVar:
     config_file_property: Optional[str] = None
     default: Optional[str] = None
     validator_fn: Optional[Callable[[Optional[str]], str]] = None
+    normalizer: Optional[Callable[[str], str]] = None
     allowed_values: Optional[dict[str, str]] = None
     cli: Optional[tuple[str, ...]] = None
 
     def get(self) -> str:
         global _have_logged_invalid_config
 
+        value = None
+
         if self.name in _cli_values:
-            return _cli_values[self.name]
-
-        if self.env and os.environ.get(self.env):
-            return os.environ.get(self.env)
-
-        if self.config_file_property:
+            value = _cli_values[self.name]
+        elif self.env and os.environ.get(self.env):
+            value = os.environ.get(self.env)
+        elif self.config_file_property:
             try:
                 with open(CONFIG_FILE.get(), "r", encoding="utf-8") as f:
                     data = json.load(f)
-                return str(data.get(self.config_file_property, self.default))
+                value = str(data.get(self.config_file_property, self.default))
             except (json.JSONDecodeError, TypeError):
                 if not _have_logged_invalid_config:
                     _have_logged_invalid_config = True
                     logging.warning(f"Config file {CONFIG_FILE.get()} not valid JSON")
             except FileNotFoundError:
                 pass
+        else:
+            value = self.default
 
-        return self.default
+        if value and self.normalizer:
+            value = self.normalizer(value)
+
+        return value
 
     def validate(self) -> Optional[str]:
         if self.validator_fn:
@@ -60,11 +66,6 @@ class ConfigVar:
 CONFIG_VARS: dict[str, ConfigVar] = {}
 
 
-def set_cli_overrides(values: dict[str, str]) -> None:
-    """Store command-line overrides for later retrieval."""
-    _cli_values.update(values)
-
-
 def add_cli_args(parser: argparse.ArgumentParser) -> None:
     """Register CLI arguments for all config variables that define them."""
     for var in CONFIG_VARS.values():
@@ -74,7 +75,6 @@ def add_cli_args(parser: argparse.ArgumentParser) -> None:
                 dest=var.name,
                 help=var.description,
                 default=argparse.SUPPRESS,
-                choices=list(var.allowed_values.keys()) if var.allowed_values else None,
             )
 
 
@@ -84,7 +84,8 @@ def apply_cli_args(args: argparse.Namespace) -> None:
     for var in CONFIG_VARS.values():
         if var.cli and hasattr(args, var.name):
             overrides[var.name] = getattr(args, var.name)
-    set_cli_overrides(overrides)
+
+    _cli_values.update(overrides)
 
 
 def _var(var: ConfigVar) -> ConfigVar:
@@ -232,6 +233,23 @@ SESSION_STORAGE_MODE = _var(
         allowed_values={
             SESSION_STORAGE_MODE_PLAIN: "Plain text (JSON). Can get large.",
             SESSION_STORAGE_MODE_COMPRESS: "Compressed via gzip",
+        },
+    )
+)
+
+
+PROMPT_MODE = _var(
+    ConfigVar(
+        name="prompt_mode",
+        description="How you want to interact with the assistant",
+        env="OCLA_SESSION_STORAGE_MODE",
+        config_file_property="promptMode",
+        default="INTERACTIVE",
+        cli=("-p", "--prompt-mode"),
+        normalizer=lambda x: x.upper(),
+        allowed_values={
+            "ONESHOT": "The program quits after a single prompt",
+            "INTERACTIVE": "You issue prompts until quit",
         },
     )
 )
