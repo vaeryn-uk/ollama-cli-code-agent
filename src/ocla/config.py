@@ -123,7 +123,7 @@ CONTEXT_WINDOW = _var(
 MODEL = _var(
     ConfigVar(
         name="model",
-        description="Model name",
+        description="The model to use for agent inference. Must be available in the Ollama API",
         env="OCLA_MODEL",
         config_file_property="model",
         default="qwen3",
@@ -209,7 +209,7 @@ THINKING_ENABLED = "ENABLED"
 THINKING = _var(
     ConfigVar(
         name="thinking",
-        description="Enable & show model thinking, if supported.",
+        description="Enable & show model thinking. If the model does not support thinking, this has no effect and thinking is disabled.",
         env="OCLA_THINKING",
         config_file_property="thinking",
         default=THINKING_ENABLED,

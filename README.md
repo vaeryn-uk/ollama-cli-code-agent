@@ -7,89 +7,140 @@ your terminal.
 ## Configuration
 
 <!-- CONFIG_TABLE_START -->
-### `config_file`
+### config_file
+
+Path to the config file
+
 - **CLI:** `N/A`
-- **Env:** `OCLA_CONFIG_FILE`
+- **Environment variable:** `OCLA_CONFIG_FILE`
 - **Config file:** `N/A`
-- **Default:** `./.ocla/config.json`
-- **Description:** Path to the config file
+- **Default value:** `./.ocla/config.json`
 
-### `context_window`
+
+### context_window
+
+Context window size in tokens
+
 - **CLI:** `N/A`
-- **Env:** `OCLA_CONTEXT_WINDOW`
+- **Environment variable:** `OCLA_CONTEXT_WINDOW`
 - **Config file:** `contextWindow`
-- **Default:** `16384`
-- **Description:** Context window size in tokens
+- **Default value:** `16384`
 
-### `log_level`
+
+### log_level
+
+Log level
+
 - **CLI:** `N/A`
-- **Env:** `OCLA_LOG_LEVEL`
+- **Environment variable:** `OCLA_LOG_LEVEL`
 - **Config file:** `logLevel`
-- **Default:** `WARNING`
-- **Description:** Log level (`CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`)
+- **Default value:** `WARNING`
+- **Allowed values:**
+  - `CRITICAL`
+  - `ERROR`
+  - `WARNING`
+  - `INFO`
+  - `DEBUG`
 
-### `model`
+### model
+
+The model to use for agent inference. Must be available in the Ollama API
+
 - **CLI:** `-m --model`
-- **Env:** `OCLA_MODEL`
+- **Environment variable:** `OCLA_MODEL`
 - **Config file:** `model`
-- **Default:** `qwen3`
-- **Description:** Model name
+- **Default value:** `qwen3`
 
-### `ollama_host`
+
+### ollama_host
+
+Override the OLLAMA_HOST for the Ollama API
+
 - **CLI:** `N/A`
-- **Env:** `OCLA_OLLAMA_HOST`
+- **Environment variable:** `OCLA_OLLAMA_HOST`
 - **Config file:** `ollamaHost`
-- **Default:** `N/A`
-- **Description:** Override the OLLAMA_HOST for the Ollama API
+- **Default value:** `N/A`
 
-### `project_context_file`
+
+### project_context_file
+
+the relative path to a file that gives ocla more context about your project (case-insensitive)
+
 - **CLI:** `N/A`
-- **Env:** `OCLA_PROJECT_CONTEXT_FILE`
+- **Environment variable:** `OCLA_PROJECT_CONTEXT_FILE`
 - **Config file:** `projectContextFiles`
-- **Default:** `AGENTS.md`
-- **Description:** the relative path to a file that gives ocla more context about your project (case-insensitive)
+- **Default value:** `AGENTS.md`
 
-### `prompt_mode`
+
+### prompt_mode
+
+How you want to interact with the assistant
+
 - **CLI:** `-p --prompt-mode`
-- **Env:** `OCLA_PROMPT_MODE`
+- **Environment variable:** `OCLA_PROMPT_MODE`
 - **Config file:** `promptMode`
-- **Default:** `INTERACTIVE`
-- **Description:** How you want to interact with the assistant (`ONESHOT`: The program quits after a single prompt, `INTERACTIVE`: You issue prompts until quit)
+- **Default value:** `INTERACTIVE`
+- **Allowed values:**
+  - `ONESHOT`: The program quits after a single prompt
+  - `INTERACTIVE`: You issue prompts until quit
 
-### `session_dir`
+### session_dir
+
+Path to the session directory
+
 - **CLI:** `N/A`
-- **Env:** `OCLA_SESSION_DIR`
+- **Environment variable:** `OCLA_SESSION_DIR`
 - **Config file:** `sessionDir`
-- **Default:** `./.ocla/sessions`
-- **Description:** Path to the session directory
+- **Default value:** `./.ocla/sessions`
 
-### `session_storage_mode`
+
+### session_storage_mode
+
+how we store session data on disk
+
 - **CLI:** `N/A`
-- **Env:** `OCLA_SESSION_STORAGE_MODE`
+- **Environment variable:** `OCLA_SESSION_STORAGE_MODE`
 - **Config file:** `sessionStorageMode`
-- **Default:** `COMPRESS`
-- **Description:** how we store session data on disk (`PLAIN`: Plain text (JSON). Can get large., `COMPRESS`: Compressed via gzip)
+- **Default value:** `COMPRESS`
+- **Allowed values:**
+  - `PLAIN`: Plain text (JSON). Can get large.
+  - `COMPRESS`: Compressed via gzip
 
-### `state_file`
+### state_file
+
+Path to the state file
+
 - **CLI:** `N/A`
-- **Env:** `OCLA_STATE_FILE`
+- **Environment variable:** `OCLA_STATE_FILE`
 - **Config file:** `stateFile`
-- **Default:** `./.ocla/state.json`
-- **Description:** Path to the state file
+- **Default value:** `./.ocla/state.json`
 
-### `thinking`
+
+### thinking
+
+Enable & show model thinking. If the model does not support thinking, this has no effect and thinking is disabled.
+
 - **CLI:** `-t --thinking`
-- **Env:** `OCLA_THINKING`
+- **Environment variable:** `OCLA_THINKING`
 - **Config file:** `thinking`
-- **Default:** `ENABLED`
-- **Description:** Enable & show model thinking, if supported. (`DISABLED`: The model will not think and nothing is shown, `HIDDEN`: The model will think, but thinking output is not displayed, `ENABLED`: The model will think and ocla prints this output)
+- **Default value:** `ENABLED`
+- **Allowed values:**
+  - `DISABLED`: The model will not think and nothing is shown
+  - `HIDDEN`: The model will think, but thinking output is not displayed
+  - `ENABLED`: The model will think and ocla prints this output
 
-### `tool_permission_mode`
+### tool_permission_mode
+
+How tools request permission to run
+
 - **CLI:** `N/A`
-- **Env:** `OCLA_TOOL_PERMISSION_MODE`
+- **Environment variable:** `OCLA_TOOL_PERMISSION_MODE`
 - **Config file:** `toolPermissionMode`
-- **Default:** `DEFAULT`
-- **Description:** How tools request permission to run (`DEFAULT`: Ask for permission for non-trivial tools, `ALWAYS_ASK`: Always ask for permission for all tools, `ALWAYS_ALLOW`: Always run any tool; use with caution)
+- **Default value:** `DEFAULT`
+- **Allowed values:**
+  - `DEFAULT`: Ask for permission for non-trivial tools
+  - `ALWAYS_ASK`: Always ask for permission for all tools
+  - `ALWAYS_ALLOW`: Always run any tool; use with caution
 
 <!-- CONFIG_TABLE_END -->
 

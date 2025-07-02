@@ -25,20 +25,22 @@ def generate_table() -> str:
         cli = " ".join(var.cli) if var.cli else "N/A"
         desc = var.description
         if var.allowed_values:
-            allowed = ", ".join(
-                f"`{k}`: {v}" if v else f"`{k}`" for k, v in var.allowed_values.items()
+            allowed = "\n".join(
+                f"  - `{k}`: {v}" if v else f"  - `{k}`" for k, v in var.allowed_values.items()
             )
-            desc = f"{desc} ({allowed})"
+        else:
+            allowed = ""
 
         rows.append(
             "\n".join(
                 [
-                    f"### `{name}`",
+                    f"### {name}\n",
+                    f"{desc}\n",
                     f"- **CLI:** `{cli}`",
-                    f"- **Env:** `{env}`",
+                    f"- **Environment variable:** `{env}`",
                     f"- **Config file:** `{prop}`",
-                    f"- **Default:** `{default}`",
-                    f"- **Description:** {desc}",
+                    f"- **Default value:** `{default}`",
+                    f"- **Allowed values:**\n{allowed}" if allowed else "",
                     "",
                 ]
             )
