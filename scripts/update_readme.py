@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Update README with a table of config vars."""
+"""Update README with a section for each config var."""
 from pathlib import Path
 import importlib.util
 import sys
@@ -17,8 +17,6 @@ END_MARKER = "<!-- CONFIG_TABLE_END -->"
 
 
 def generate_table() -> str:
-    header = "| Name | CLI | Env | Config file | Default | Description |"
-    sep = "| --- | --- | --- | --- | --- | --- |"
     rows = []
     for name, var in sorted(config.CONFIG_VARS.items()):
         env = var.env or "N/A"
@@ -27,14 +25,27 @@ def generate_table() -> str:
         cli = " ".join(var.cli) if var.cli else "N/A"
         desc = var.description
         if var.allowed_values:
-            allowed = ", ".join(
-                f"`{k}`: {v}" if v else f"`{k}`" for k, v in var.allowed_values.items()
+            allowed = "\n".join(
+                f"  - `{k}`: {v}" if v else f"  - `{k}`" for k, v in var.allowed_values.items()
             )
-            desc = f"{desc} ({allowed})"
+        else:
+            allowed = ""
+
         rows.append(
-            f"| `{name}` | `{cli}` | `{env}` | `{prop}` | `{default}` | {desc} |"
+            "\n".join(
+                [
+                    f"### {name}\n",
+                    f"{desc}\n",
+                    f"- **CLI:** `{cli}`",
+                    f"- **Environment variable:** `{env}`",
+                    f"- **Config file:** `{prop}`",
+                    f"- **Default value:** `{default}`",
+                    f"- **Allowed values:**\n{allowed}" if allowed else "",
+                    "",
+                ]
+            )
         )
-    return "\n".join([header, sep] + rows)
+    return "\n".join(rows)
 
 
 def update_readme(path: Path) -> None:
