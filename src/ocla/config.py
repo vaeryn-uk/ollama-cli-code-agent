@@ -131,6 +131,16 @@ MODEL = _var(
     )
 )
 
+OLLAMA_HOST_OVERRIDE = _var(
+    ConfigVar(
+        name="ollama_host",
+        description="Override the OLLAMA_HOST for the Ollama API",
+        env="OCLA_OLLAMA_HOST",
+        config_file_property="ollamaHost",
+        default=None,
+    )
+)
+
 LOG_LEVEL = _var(
     ConfigVar(
         name="log_level",
@@ -253,7 +263,7 @@ PROMPT_MODE = _var(
     ConfigVar(
         name="prompt_mode",
         description="How you want to interact with the assistant",
-        env="OCLA_SESSION_STORAGE_MODE",
+        env="OCLA_PROMPT_MODE",
         config_file_property="promptMode",
         default="INTERACTIVE",
         cli=("-p", "--prompt-mode"),

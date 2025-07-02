@@ -29,6 +29,7 @@ from ocla.config import (
     THINKING_ENABLED,
     TOOL_PERMISSION_MODE_DEFAULT,
     TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
+    OLLAMA_HOST_OVERRIDE,
     PROMPT_MODE,
 )
 from ocla.session import (
@@ -293,7 +294,7 @@ def do_chat(session: Session, prompt: str) -> str:
     return "".join(accumulated_text)
 
 
-def main(argv=None):
+def _build_arg_parser() -> argparse.ArgumentParser | None:
     parser = argparse.ArgumentParser(
         description="Interact with a local Ollama model",
     )
@@ -320,19 +321,10 @@ def main(argv=None):
     subparsers.add_parser("model", help="Show model information")
     subparsers.add_parser("tools", help="Display tools made available to the agent")
 
-    args, prompt_parts = parser.parse_known_args(argv)
-    apply_cli_args(args)
+    return parser
 
-    if not sys.stdin.isatty() and not prompt_parts:
-        # Automatically run in ONESHOT mode when input is piped
-        from ocla.config import _cli_values, PROMPT_MODE
 
-        _cli_values[PROMPT_MODE.name] = "ONESHOT"
-
-    for var in CONFIG_VARS.values():
-        if validation_err := var.validate():
-            parser.error(f"Invalid value for {var.name}: {validation_err}")
-
+def _initialization_check():
     model_ctx = _model_context_limit(MODEL.get())
     if model_ctx is None:
         logging.warning(
@@ -348,6 +340,25 @@ def main(argv=None):
             model_ctx,
         )
 
+
+def main(argv=None):
+    parser = _build_arg_parser()
+
+    args = parser.parse_args(argv)
+    apply_cli_args(args)
+
+    host_override = OLLAMA_HOST_OVERRIDE.get()
+    if host_override:
+        os.environ["OLLAMA_HOST"] = host_override
+
+    for var in CONFIG_VARS.values():
+        if validation_err := var.validate():
+            parser.error(
+                f"Invalid value for {var.name} ({var.get()}): {validation_err}"
+            )
+
+    _initialization_check()
+
     if args.command == "session":
         if args.session_cmd == "new":
             name = args.name or generate_session_name()
@@ -355,7 +366,6 @@ def main(argv=None):
             set_current_session_name(name)
             print(name)
         elif args.session_cmd == "list":
-
             table = Table(show_header=True, header_style="bold")
 
             table.add_column("Session")
@@ -383,8 +393,7 @@ def main(argv=None):
             if not session_exists(args.name):
                 parser.error(f"Unknown session: {args.name}")
             set_current_session_name(args.name)
-        else:
-            session_parser.print_help()
+
         return
     elif args.command == "config":
         table = Table(title="Available Configuration Variables")
@@ -455,10 +464,8 @@ def main(argv=None):
     if get_current_session_name() is None:
         set_current_session_name(session_name)
 
-    # Treat remaining arguments as the prompt
-    msg = " ".join(prompt_parts).strip()
-    if not msg and not sys.stdin.isatty():
-        msg = sys.stdin.read().strip()
+    # Take prompt from stdin if provided.
+    msg = None if sys.stdin.isatty() else sys.stdin.read().strip()
 
     while True:
         if not msg or len(msg) == 0:
