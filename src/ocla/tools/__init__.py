@@ -37,7 +37,7 @@ class Tool(abc.ABC):
     def execute(self, *args, **kwargs) -> (typing.Any, str):
         pass
 
-    def prompt(self, call: Message.ToolCall, yes_no: str) -> str:
+    def prompt(self, call: dict, yes_no: str) -> str:
         return f"Run tool '{self.name}'? Arguments: {truncate(format_tool_arguments(call), 50)} {yes_no}"
 
     def __call__(self, *args, **kwargs):

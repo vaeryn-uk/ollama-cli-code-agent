@@ -22,7 +22,6 @@ from .config import (
 from datetime import datetime
 from pathlib import Path
 
-import ollama
 from ocla.state import load_state, save_state
 
 DEFAULT_SYSTEM_PROMPT = """
@@ -179,9 +178,6 @@ class Session:
 
     def add(self, message: Dict[str, Any]) -> None:
         """Append a message and immediately save the session."""
-        if isinstance(message, ollama.Message):
-            message = message.model_dump(mode="python", by_alias=True)
-
         self.messages.append(message)
 
         if self.token_count() > int(CONTEXT_WINDOW.get()):

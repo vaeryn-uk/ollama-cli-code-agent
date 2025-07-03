@@ -84,6 +84,18 @@ How you want to interact with the assistant
   - `ONESHOT`: The program quits after a single prompt
   - `INTERACTIVE`: You issue prompts until quit
 
+### provider
+
+Model provider to use
+
+- **CLI:** `N/A`
+- **Environment variable:** `OCLA_PROVIDER`
+- **Config file:** `provider`
+- **Default value:** `ollama`
+- **Allowed values:**
+  - `ollama`: Use local Ollama models
+  - `openai`: Use the OpenAI API
+
 ### session_dir
 
 Path to the session directory

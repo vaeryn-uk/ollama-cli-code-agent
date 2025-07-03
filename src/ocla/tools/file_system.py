@@ -6,8 +6,6 @@ from rich.syntax import Syntax
 from rich.console import Console
 from ocla.util import can_access_path
 
-import ollama
-
 from . import Tool, ToolSecurity
 
 
@@ -62,8 +60,8 @@ class WriteFile(Tool):
         file_path.write_text(new_content, encoding=encoding)
         return f"written {len(new_content)} bytes to {path}", ""
 
-    def prompt(self, call: ollama.Message.ToolCall, yes_no: str) -> str:
-        args = call.function.arguments or {}
+    def prompt(self, call: dict, yes_no: str) -> str:
+        args = call.get("function", {}).get("arguments", {}) or {}
         try:
             path = args["path"]
             new_content = args["new_content"]

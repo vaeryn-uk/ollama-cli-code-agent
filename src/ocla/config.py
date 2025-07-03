@@ -20,11 +20,15 @@ class ConfigVar:
     normalizer: Optional[Callable[[str], str]] = None
     allowed_values: Optional[dict[str, str]] = None
     cli: Optional[tuple[str, ...]] = None
+    provider: Optional[str] = None
 
     def get(self) -> str:
         global _have_logged_invalid_config
 
         value = None
+
+        if self.provider and PROVIDER.get() != self.provider:
+            return self.default
 
         if self.name in _cli_values:
             value = _cli_values[self.name]
@@ -50,6 +54,9 @@ class ConfigVar:
         return value
 
     def validate(self) -> Optional[str]:
+        if self.provider and PROVIDER.get() != self.provider:
+            return None
+
         if self.validator_fn:
             return self.validator_fn(self.get())
 
@@ -107,6 +114,20 @@ CONFIG_FILE = _var(
     )
 )
 
+PROVIDER = _var(
+    ConfigVar(
+        name="provider",
+        description="Model provider to use",
+        env="OCLA_PROVIDER",
+        config_file_property="provider",
+        default="ollama",
+        allowed_values={
+            "ollama": "Use local Ollama models",
+            "openai": "Use the OpenAI API",
+        },
+    )
+)
+
 CONTEXT_WINDOW = _var(
     ConfigVar(
         name="context_window",
@@ -138,6 +159,7 @@ OLLAMA_HOST_OVERRIDE = _var(
         env="OCLA_OLLAMA_HOST",
         config_file_property="ollamaHost",
         default="",
+        provider="ollama",
     )
 )
 

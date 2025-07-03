@@ -4,7 +4,8 @@ import os
 import humanize
 from datetime import datetime
 
-from ollama import Message, ResponseError
+from typing import Any, Dict
+
 from tzlocal import get_localzone
 
 from rich.table import Table
@@ -27,9 +28,9 @@ from ocla.config import (
     THINKING_ENABLED,
     TOOL_PERMISSION_MODE_DEFAULT,
     TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
-    OLLAMA_HOST_OVERRIDE,
     PROMPT_MODE,
 )
+from ocla.providers import get_provider
 from ocla.session import (
     Session,
     list_sessions,
@@ -41,7 +42,6 @@ from ocla.session import (
     load_session_meta,
 )
 from ocla.tools import ALL, ToolSecurity
-import ollama
 
 _LOG_LEVEL = LOG_LEVEL.get()
 
@@ -61,7 +61,7 @@ signal.signal(signal.SIGINT, _quit_gracefully)
 if LOG_LEVEL.is_valid():
     logging.basicConfig(level=_LOG_LEVEL)
 
-    # Configure httpx underneath ollama client.
+    # Configure httpx underneath HTTP clients.
     logging.config.dictConfig(
         {
             "version": 1,
@@ -95,39 +95,28 @@ if LOG_LEVEL.is_valid():
         }
     )
 
-_ollama_client: ollama.Client | None = None
+
+provider = get_provider()
 
 
-def _resolve_ollama_host() -> str | None:
-    return (
-        OLLAMA_HOST_OVERRIDE.get()
-        or os.environ.get("OLLAMA_HOST")
-        or "http://localhost:11434"
-    )
-
-
-def _get_ollama_client():
-    global _ollama_client
-    if _ollama_client is None:
-        _ollama_client = ollama.Client(host=_resolve_ollama_host())
-    return _ollama_client
-
-
-def execute_tool(call: ollama.Message.ToolCall) -> str:
-    entry = ALL.get(call.function.name)
+def execute_tool(call: Dict[str, Any]) -> str:
+    fn = call.get("function", {}).get("name")
+    entry = ALL.get(fn)
 
     result = None
 
     if entry is None:
-        err = f"Unknown tool: {call.function.name}"
+        err = f"Unknown tool: {fn}"
     else:
         try:
-            result, err = entry.execute(**(call.function.arguments or {}))
+            result, err = entry.execute(
+                **(call.get("function", {}).get("arguments", {}) or {})
+            )
             result = str(result)
         except Exception as e:
             err = f"Unknown error"
 
-    info(f"Executed tool '{call.function.name}' with {format_tool_arguments(call)}")
+    info(f"Executed tool '{fn}' with {format_tool_arguments(call)}")
 
     if result == "" and not err:
         result = "[[ no output from tool ]]"
@@ -141,11 +130,11 @@ def execute_tool(call: ollama.Message.ToolCall) -> str:
     return err or result
 
 
-def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
+def _confirm_tool(call: Dict[str, Any]) -> bool:
     """Ask the user whether to run this tool call respecting config."""
-    fn = call.function.name
+    fn = call.get("function", {}).get("name")
 
-    tool = ALL.get(call.function.name)
+    tool = ALL.get(fn)
     if not tool:
         error(f"Unknown tool: {fn}")
         return False
@@ -179,60 +168,31 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
 
 
 def _model_context_limit(model: str) -> int | None:
-    try:
-        response = _get_ollama_client().show(model)
-    except Exception as e:
-        logging.debug(f"failed to query model info: {e}")
-        return None
-
-    for key in response.modelinfo:
-        if "context_length" in key or "num_ctx" in key:
-            if (
-                isinstance(response.modelinfo[key], str)
-                and response.modelinfo[key].isdigit()
-            ):
-                return int(response.modelinfo[key])
-
-            if type(response.modelinfo[key]) is int:
-                return response.modelinfo[key]
-
-    return None
+    return provider.context_limit(model)
 
 
 def _model_supports_thinking() -> bool | None:
-    try:
-        response = _get_ollama_client().show(MODEL.get())
-    except Exception as e:
-        logging.debug(f"failed to query model info: {e}")
-        return None
-
-    if response.capabilities and "thinking" in response.capabilities:
-        return True
-
-    return False
+    return provider.supports_thinking(MODEL.get())
 
 
-def _chat_stream(**kwargs) -> tuple[str, Message]:
+def _chat_stream(messages, tools) -> tuple[str, Dict[str, Any]]:
     full_content: str = ""
     full_thinking: str = ""
-    tool_calls: list[ollama.Message.ToolCall] = []  # gather all tool calls
+    tool_calls: list[Dict[str, Any]] = []  # gather all tool calls
     last_role: str | None = None  # keep whatever role we see last
 
     thinking_mode = THINKING.get()
     enable_think = thinking_mode != THINKING_DISABLED and _model_supports_thinking()
     show_thinking = thinking_mode == THINKING_ENABLED
 
-    for chunk in _get_ollama_client().chat(
-        stream=True,
-        think=enable_think,
-        options={"num_ctx": int(CONTEXT_WINDOW.get())},
-        **kwargs,
-    ):
+    for chunk in provider.chat(messages=messages, tools=tools):
         msg = chunk.get("message", {})
+        if hasattr(msg, "model_dump"):
+            msg = msg.model_dump(mode="python", by_alias=True)
         last_role = msg.get("role", last_role)
 
         if part := msg.get("content"):
-            full_thinking += part
+            full_content += part
             agent_output(part, thinking=False, end="")
 
         if part := msg.get("thinking"):
@@ -240,16 +200,21 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
             if show_thinking:
                 agent_output(part, thinking=True, end="")
 
-        if "tool_calls" in msg:
-            tool_calls.extend(msg["tool_calls"])
+        if msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                if hasattr(tc, "model_dump"):
+                    tool_calls.append(tc.model_dump(mode="python", by_alias=True))
+                else:
+                    tool_calls.append(tc)
 
-    # Build a consolidated assistant message
-    assistant_msg = Message(
-        role=last_role or "assistant",
-        content=full_content,
-        thinking=full_thinking,
-        tool_calls=tool_calls,
-    )
+    assistant_msg: Dict[str, Any] = {
+        "role": last_role or "assistant",
+        "content": full_content,
+    }
+    if full_thinking:
+        assistant_msg["thinking"] = full_thinking
+    if tool_calls:
+        assistant_msg["tool_calls"] = tool_calls
 
     return full_content, assistant_msg
 
@@ -263,9 +228,8 @@ def do_chat(session: Session, prompt: str) -> str:
     while True:
         # --- 1️⃣  ask the model ------------------------------------------
         content, msg = _chat_stream(
-            model=model,
-            messages=session.messages,
-            tools=[t.describe() for t in ALL.values()],
+            session.messages,
+            [t.describe() for t in ALL.values()],
         )
         session.add(msg)
         if content:
@@ -286,7 +250,7 @@ def do_chat(session: Session, prompt: str) -> str:
             session.add(
                 {
                     "role": "tool",
-                    "name": call.function.name,
+                    "name": call.get("function", {}).get("name"),
                     "content": tool_output,
                 }
             )
@@ -302,7 +266,7 @@ def do_chat(session: Session, prompt: str) -> str:
 
 def _build_arg_parser() -> argparse.ArgumentParser | None:
     parser = argparse.ArgumentParser(
-        description="Interact with a local Ollama model",
+        description="Interact with a language model",
     )
     parser.add_argument(
         "-n",
@@ -336,27 +300,15 @@ def _initialization_check():
 
     model = MODEL.get()
     try:
-        available = _get_ollama_client().list()
-    except (ResponseError, ConnectionError):
-        error(f"Cannot connect to Ollama at {_resolve_ollama_host()}. Is it running?")
-        raise SystemExit(1)
-
-    try:
-        _get_ollama_client().show(model)
-    except ResponseError:
-        error(
-            f"Ollama does not have the requested model '{model}'. "
-            "Please pull the model or configure a different one."
-        )
-        info(
-            f"Available models: {', '.join([x.model for x in available.models if x.model])}"
-        )
+        provider.initialization_check()
+    except RuntimeError as e:
+        error(str(e))
         raise SystemExit(1)
 
     model_ctx = _model_context_limit(model)
     if model_ctx is None:
         logging.warning(
-            f"Could not determine model context limit from ollama for model {MODEL.get()}"
+            f"Could not determine model context limit from {provider.name} for model {MODEL.get()}"
         )
 
     ctx_conf = int(CONTEXT_WINDOW.get())
