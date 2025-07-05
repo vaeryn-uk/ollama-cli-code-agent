@@ -30,7 +30,7 @@ from ocla.config import (
     TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
     PROMPT_MODE,
 )
-from ocla.providers import get_provider
+from ocla.providers import get_provider, ModelInfo
 from ocla.session import (
     Session,
     list_sessions,
@@ -167,12 +167,8 @@ def _confirm_tool(call: Dict[str, Any]) -> bool:
     return False
 
 
-def _model_context_limit(model: str) -> int | None:
-    return provider.context_limit(model)
-
-
-def _model_supports_thinking() -> bool | None:
-    return provider.supports_thinking(MODEL.get())
+def _current_model_info() -> ModelInfo:
+    return provider.model_info(MODEL.get())
 
 
 def _chat_stream(messages, tools) -> tuple[str, Dict[str, Any]]:
@@ -182,10 +178,10 @@ def _chat_stream(messages, tools) -> tuple[str, Dict[str, Any]]:
     last_role: str | None = None  # keep whatever role we see last
 
     thinking_mode = THINKING.get()
-    enable_think = thinking_mode != THINKING_DISABLED and _model_supports_thinking()
+    enable_think = thinking_mode != THINKING_DISABLED and _current_model_info().supports_thinking
     show_thinking = thinking_mode == THINKING_ENABLED
 
-    for chunk in provider.chat(messages=messages, tools=tools):
+    for chunk in provider.chat(messages=messages, tools=tools, thinking=enable_think):
         msg = chunk.get("message", {})
         if hasattr(msg, "model_dump"):
             msg = msg.model_dump(mode="python", by_alias=True)
@@ -288,8 +284,12 @@ def _build_arg_parser() -> argparse.ArgumentParser | None:
     session_set.add_argument("name")
 
     subparsers.add_parser("config", help="Show config information")
-    subparsers.add_parser("model", help="Show model information")
+    model = subparsers.add_parser("model", help="Show model information")
     subparsers.add_parser("tools", help="Display tools made available to the agent")
+
+    model_cmd = model.add_subparsers(dest="model_cmd")
+    model_cmd.add_parser("list", help="Show available models")
+    model_cmd.add_parser("info", help="Show information for the current model")
 
     return parser
 
@@ -298,14 +298,13 @@ def _initialization_check():
     if os.getenv("OCLA_DISABLE_INIT_CHECK"):
         return
 
-    model = MODEL.get()
     try:
         provider.initialization_check()
     except RuntimeError as e:
         error(str(e))
         raise SystemExit(1)
 
-    model_ctx = _model_context_limit(model)
+    model_ctx = _current_model_info().context_length
     if model_ctx is None:
         logging.warning(
             f"Could not determine model context limit from {provider.name} for model {MODEL.get()}"
@@ -405,30 +404,53 @@ def main(argv=None):
         console.print(table)
         return
     elif args.command == "model":
-        table = Table(title="Model info", show_header=False)
+        if args.model_cmd == "info":
+            table = Table(title="Model info", show_header=False)
 
-        table.add_column("key")
-        table.add_column("value")
+            table.add_column("key")
+            table.add_column("value")
 
-        table.add_row("Name", MODEL.get())
+            table.add_row("Name", MODEL.get())
 
-        table.add_section()
-        table.add_row(
-            "Model maximum context window",
-            str(_model_context_limit(MODEL.get())) or "N/A",
-        )
-        table.add_row("Current configured context window", f"{CONTEXT_WINDOW.get()}")
+            table.add_section()
+            table.add_row(
+                "Model maximum context window",
+                str(_current_model_info().context_length) or "N/A",
+            )
+            table.add_row("Current configured context window", f"{CONTEXT_WINDOW.get()}")
 
-        table.add_section()
-        supported = _model_supports_thinking()
-        table.add_row(
-            "Model supports thinking?",
-            "N/A" if supported is None else str(supported),
-        )
-        table.add_row("Current thinking setting", THINKING.get())
+            table.add_section()
+            supported = _current_model_info().supports_thinking
+            table.add_row(
+                "Model supports thinking?",
+                "N/A" if supported is None else str(supported),
+            )
+            table.add_row("Current thinking setting", THINKING.get())
 
-        console.print(table)
-        return
+            console.print(table)
+            return
+        elif args.model_cmd == "list":
+            if len(provider.available_models()) == 0:
+                console.print("No models available")
+                return
+
+            table = Table(title="Available models")
+
+            table.add_column("Model")
+            table.add_column("Supports thinking?")
+            table.add_column("Context window")
+
+            for provider_model in provider.available_models():
+                table.add_row(
+                    provider_model.name,
+                    str(provider_model.supports_thinking),
+                    str(provider_model.context_length) or "Unknown",
+                )
+
+            console.print(table)
+            return
+        else:
+            parser.error("Invalid model command")
     elif args.command == "tools":
         for t in ALL.values():
             console.print(t.describe().model_dump(exclude_none=True))

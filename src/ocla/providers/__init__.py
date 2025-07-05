@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import abc
-from typing import Iterable, Any
+import dataclasses
+from typing import Iterable, Any, Optional
 
 from ocla.config import PROVIDER
 
+@dataclasses.dataclass
+class ModelInfo:
+    name: str
+    context_length: Optional[int] = None
+    supports_thinking: bool = None
 
 class Provider(abc.ABC):
     """Abstract base class for model providers."""
@@ -15,24 +21,18 @@ class Provider(abc.ABC):
     def initialization_check(self) -> None:
         """Optional provider specific initialization checks."""
 
-    @abc.abstractmethod
-    def context_limit(self, model: str) -> int | None:
-        pass
-
-    @abc.abstractmethod
-    def supports_thinking(self, model: str) -> bool | None:
-        pass
+    def model_info(self, model: str) -> ModelInfo:
+        """Get info for the given model."""
 
     @abc.abstractmethod
     def chat(
-        self, messages: list[dict[str, Any]], tools: list[Any]
+        self,messages: list[dict[str, Any]], tools: list[Any], thinking: bool
     ) -> Iterable[dict[str, Any]]:
         pass
 
     @abc.abstractmethod
-    def available_models(self) -> list[str]:
-        """Return a list of available model identifiers."""
-        pass
+    def available_models(self) -> list[ModelInfo]:
+        """Return a list of available models."""
 
 
 from .ollama import OllamaProvider  # noqa: E402

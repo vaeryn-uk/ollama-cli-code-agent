@@ -121,6 +121,7 @@ PROVIDER = _var(
         env="OCLA_PROVIDER",
         config_file_property="provider",
         default="ollama",
+        cli=("-p", "--provider"),
         allowed_values={
             "ollama": "Use local Ollama models",
             "openai": "Use the OpenAI API",
@@ -288,7 +289,7 @@ PROMPT_MODE = _var(
         env="OCLA_PROMPT_MODE",
         config_file_property="promptMode",
         default="INTERACTIVE",
-        cli=("-p", "--prompt-mode"),
+        cli=("-pm", "--prompt-mode"),
         normalizer=lambda x: x.upper(),
         allowed_values={
             "ONESHOT": "The program quits after a single prompt",

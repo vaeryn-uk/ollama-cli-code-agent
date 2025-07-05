@@ -11,7 +11,7 @@ from ocla.config import (
     THINKING,
     THINKING_DISABLED,
 )
-from . import Provider
+from . import Provider, ModelInfo
 
 
 class OllamaProvider(Provider):
@@ -39,65 +39,62 @@ class OllamaProvider(Provider):
 
         model = MODEL.get()
         try:
-            available = self.available_models()
-        except (ollama.ResponseError, ConnectionError):
+            model = self._client_obj().show(model)
+        except ConnectionError:
             raise RuntimeError(f"Cannot connect to Ollama at {self._resolve_host()}")
-
-        if model not in available:
+        except ollama.ResponseError:
             raise RuntimeError(
-                f"Ollama does not have the requested model '{model}'. Available models: {', '.join(available)}"
+                f"Failed to find ollama model info for '{model}'\nAvailable models: {', '.join([x.name for x in self.available_models()])}"
             )
 
-    def context_limit(self, model: str) -> int | None:
-        try:
-            response = self._client_obj().show(model)
-        except Exception as e:  # pragma: no cover - network errors
-            logging.debug(f"failed to query model info: {e}")
-            return None
-
-        for key in response.modelinfo:
+    def model_info(self, model: str) -> ModelInfo:
+        info = self._client_obj().show(model)
+        context_length = None
+        for key in info.modelinfo:
             if "context_length" in key or "num_ctx" in key:
                 if (
-                    isinstance(response.modelinfo[key], str)
-                    and response.modelinfo[key].isdigit()
+                        isinstance(info.modelinfo[key], str)
+                        and info.modelinfo[key].isdigit()
                 ):
-                    return int(response.modelinfo[key])
-                if type(response.modelinfo[key]) is int:
-                    return response.modelinfo[key]
-        return None
+                    context_length = int(info.modelinfo[key])
+                    break
+                if type(info.modelinfo[key]) is int:
+                    context_length = info.modelinfo[key]
+                    break
 
-    def supports_thinking(self, model: str) -> bool | None:
-        try:
-            response = self._client_obj().show(model)
-        except Exception as e:  # pragma: no cover - network errors
-            logging.debug(f"failed to query model info: {e}")
-            return None
-
-        if response.capabilities and "thinking" in response.capabilities:
-            return True
-        return False
+        return ModelInfo(
+            name=model,
+            supports_thinking="thinking" in info.capabilities,
+            context_length=context_length,
+        )
 
     def chat(
-        self, messages: list[dict[str, Any]], tools: list[Any]
+        self, messages: list[dict[str, Any]], tools: list[Any], thinking: bool
     ) -> Iterable[dict[str, Any]]:
-        think_mode = THINKING.get()
-        enable_think = think_mode != THINKING_DISABLED and self.supports_thinking(
-            MODEL.get()
-        )
         for chunk in self._client_obj().chat(
             model=MODEL.get(),
             messages=messages,
             tools=tools,
             stream=True,
-            think=enable_think,
+            think=thinking,
             options={"num_ctx": int(CONTEXT_WINDOW.get())},
         ):
             yield chunk
 
-    def available_models(self) -> list[str]:
+    def available_models(self) -> list[ModelInfo]:
         try:
             data = self._client_obj().list()
         except Exception as e:  # pragma: no cover - network errors
             logging.debug(f"failed to list models: {e}")
             return []
-        return [m.model for m in data.models if m.model]
+
+        out = []
+
+        for model in data.models or []:
+            try:
+                out.append(self.model_info(model.model))
+            except Exception as e:  # pragma: no cover - network errors
+                logging.debug(f"failed to query model info: {e}")
+                continue
+
+        return out
