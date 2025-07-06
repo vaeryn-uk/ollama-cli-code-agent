@@ -40,7 +40,7 @@ from ocla.session import (
     ContextWindowExceededError,
     load_session_meta,
 )
-from ocla.tools import ALL, ToolSecurity
+from ocla.tools import ALL as ALL_TOOLS, ToolSecurity, Tool
 
 _LOG_LEVEL = LOG_LEVEL.get()
 
@@ -100,7 +100,7 @@ provider = get_provider()
 
 def execute_tool(call: Dict[str, Any]) -> str:
     fn = call.get("function", {}).get("name")
-    entry = ALL.get(fn)
+    entry = ALL_TOOLS.get(fn)
 
     result = None
 
@@ -133,7 +133,7 @@ def _confirm_tool(call: Dict[str, Any]) -> bool:
     """Ask the user whether to run this tool call respecting config."""
     fn = call.get("function", {}).get("name")
 
-    tool = ALL.get(fn)
+    tool = ALL_TOOLS.get(fn)
     if not tool:
         error(f"Unknown tool: {fn}")
         return False
@@ -170,7 +170,7 @@ def _current_model_info() -> ModelInfo:
     return provider.model_info(MODEL.get())
 
 
-def _chat_stream(messages, tools) -> tuple[str, Dict[str, Any]]:
+def _chat_stream(messages, tools: list[Tool]) -> tuple[str, Dict[str, Any]]:
     full_content: str = ""
     full_thinking: str = ""
     tool_calls: list[Dict[str, Any]] = []  # gather all tool calls
@@ -179,8 +179,9 @@ def _chat_stream(messages, tools) -> tuple[str, Dict[str, Any]]:
     thinking_mode = THINKING.get()
     enable_think = thinking_mode != THINKING_DISABLED and _current_model_info().supports_thinking
     show_thinking = thinking_mode == THINKING_ENABLED
+    num_ctx = int(CONTEXT_WINDOW.get()) if CONTEXT_WINDOW.get() else None
 
-    for chunk in provider.chat(messages=messages, tools=tools, thinking=enable_think):
+    for chunk in provider.chat(messages=messages, tools=tools, thinking=enable_think, model=MODEL.get(), context_window=num_ctx):
         msg = chunk.get("message", {})
         if hasattr(msg, "model_dump"):
             msg = msg.model_dump(mode="python", by_alias=True)
@@ -224,7 +225,7 @@ def do_chat(session: Session, prompt: str) -> str:
         # --- 1️⃣  ask the model ------------------------------------------
         content, msg = _chat_stream(
             session.messages,
-            [t.describe() for t in ALL.values()],
+            tools=ALL_TOOLS.values(),
         )
         session.add(msg)
         if content:
@@ -247,6 +248,7 @@ def do_chat(session: Session, prompt: str) -> str:
                     "role": "tool",
                     "name": call.get("function", {}).get("name"),
                     "content": tool_output,
+                    "tool_call_id": call.get("id", None), # OpenAI needs this.
                 }
             )
 
@@ -453,7 +455,7 @@ def main(argv=None):
         else:
             parser.error("Invalid model command")
     elif args.command == "tools":
-        for t in ALL.values():
+        for t in ALL_TOOLS.values():
             console.print(t.describe().model_dump(exclude_none=True))
         return
 

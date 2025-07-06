@@ -26,7 +26,7 @@ class Provider(abc.ABC):
 
     @abc.abstractmethod
     def chat(
-        self,messages: list[dict[str, Any]], tools: list[Any], thinking: bool, model: str, context_window: Optional[int]
+        self,messages: list[dict[str, Any]], tools: list[Tool], thinking: bool, model: str, context_window: Optional[int]
     ) -> Iterable[dict[str, Any]]:
         pass
 

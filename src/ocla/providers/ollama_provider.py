@@ -71,7 +71,7 @@ class OllamaProvider(Provider):
         for chunk in self._client_obj().chat(
             model=model,
             messages=messages,
-            tools=tools,
+            tools=[t.describe() for t in tools],
             stream=True,
             think=thinking,
             options=opts,
