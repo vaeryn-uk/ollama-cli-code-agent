@@ -17,6 +17,7 @@ from .config import (
     SESSION_STORAGE_MODE_PLAIN,
     SESSION_STORAGE_MODE_COMPRESS,
     CONTEXT_WINDOW,
+    PROVIDER,
 )
 
 from datetime import datetime
@@ -38,6 +39,17 @@ class ContextWindowExceededError(RuntimeError):
 
     def __init__(self, exceeds_message: str):
         self.exceeds_message = exceeds_message
+
+
+class ProviderMismatchError(RuntimeError):
+    """Raised when an existing session was created with a different provider."""
+
+    def __init__(self, name: str, expected: str, actual: str) -> None:
+        super().__init__(
+            f"Session {name} was created with provider '{expected}' but current provider is '{actual}'."
+        )
+        self.expected = expected
+        self.actual = actual
 
 
 def _encode_data(data: bytes, mode: str) -> bytes:
@@ -97,6 +109,7 @@ class Session:
     meta_path: str = field(init=False)
     messages: List[Dict[str, Any]] = field(default_factory=list)
     storage_mode: str = field(init=False)
+    provider: str = field(init=False)
     tokens: int = field(init=False, default=0)
 
     def __post_init__(self):
@@ -106,6 +119,8 @@ class Session:
 
         # (1) load metadata (if any) so we know how to decode the session file
         now_iso = datetime.now(timezone.utc).isoformat()
+        self.provider = PROVIDER.get()
+        update_meta = False
         if os.path.exists(self.meta_path):
             with open(self.meta_path, "r", encoding="utf-8") as f:
                 meta = json.load(f)
@@ -113,6 +128,14 @@ class Session:
             self.used = meta.get("used", now_iso)
             self.storage_mode = meta.get("storage_mode", SESSION_STORAGE_MODE.get())
             self.tokens = int(meta.get("tokens", 0))
+            meta_provider = meta.get("provider")
+            if meta_provider:
+                if meta_provider != self.provider:
+                    raise ProviderMismatchError(self.name, meta_provider, self.provider)
+                self.provider = meta_provider
+            else:
+                # Upgrade legacy sessions later once messages are loaded
+                update_meta = True
         else:
             self.created = now_iso
             self.used = now_iso
@@ -148,6 +171,8 @@ class Session:
                 )
 
         self.tokens = self.token_count()
+        if update_meta:
+            self._write_meta()
 
     def _write_meta(self) -> None:
         os.makedirs(SESSION_DIR.get(), exist_ok=True)
@@ -158,6 +183,7 @@ class Session:
                     "used": self.used,
                     "storage_mode": self.storage_mode,
                     "tokens": self.token_count(),
+                    "provider": self.provider,
                 },
                 f,
                 indent=2,
@@ -209,6 +235,7 @@ class SessionInfo:
     created: datetime
     used: datetime
     tokens: int
+    provider: str
 
     def usage_pct(self) -> str:
         pct = self.tokens / int(CONTEXT_WINDOW.get())
@@ -228,6 +255,7 @@ def load_session_meta(name: str) -> SessionInfo | None:
     with open(meta_path, "r", encoding="utf-8") as fp:
         meta = json.load(fp)
     tokens = int(meta.get("tokens", 0))
+    provider = meta.get("provider", PROVIDER.get())
 
     # ISO-8601 strings → aware datetimes (UTC)
     created = datetime.fromisoformat(meta["created"].replace("Z", "+00:00"))
@@ -238,6 +266,7 @@ def load_session_meta(name: str) -> SessionInfo | None:
         created=created,
         used=used,
         tokens=tokens,
+        provider=provider,
     )
 
 
