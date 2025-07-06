@@ -21,7 +21,6 @@ from ocla.config import (
     LOG_LEVEL,
     CONFIG_VARS,
     add_cli_args,
-    apply_cli_args,
     TOOL_PERMISSION_MODE,
     THINKING,
     THINKING_DISABLED,
@@ -299,7 +298,7 @@ def _initialization_check():
         return
 
     try:
-        provider.initialization_check()
+        provider.initialization_check(MODEL.get())
     except RuntimeError as e:
         error(str(e))
         raise SystemExit(1)
@@ -322,9 +321,7 @@ def _initialization_check():
 
 def main(argv=None):
     parser = _build_arg_parser()
-
     args = parser.parse_args(argv)
-    apply_cli_args(args)
 
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():
@@ -382,13 +379,17 @@ def main(argv=None):
         table.add_column("Allowed values", style="")
 
         for var in CONFIG_VARS.values():
+            current_value = var.get() or ""
+            if var.sensitive and current_value:
+                current_value = "************"
+
             table.add_row(
                 var.name,
                 var.description,
                 var.env or "",
                 var.config_file_property or "",
                 var.default or "",
-                var.get() or "",
+                current_value,
                 (
                     "\n".join(
                         [

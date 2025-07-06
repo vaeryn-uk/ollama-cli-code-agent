@@ -2,15 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Iterable, Any
+from typing import Iterable, Any, Optional
+import ollama
 
-from ocla.config import (
-    CONTEXT_WINDOW,
-    MODEL,
-    OLLAMA_HOST_OVERRIDE,
-    THINKING,
-    THINKING_DISABLED,
-)
+from ocla.config import OLLAMA_HOST_OVERRIDE
 from . import Provider, ModelInfo
 
 
@@ -29,15 +24,12 @@ class OllamaProvider(Provider):
 
     def _client_obj(self):
         if self._client is None:
-            import ollama
-
             self._client = ollama.Client(host=self._resolve_host())
         return self._client
 
-    def initialization_check(self) -> None:
+    def initialization_check(self, model: str) -> None:
         import ollama
 
-        model = MODEL.get()
         try:
             model = self._client_obj().show(model)
         except ConnectionError:
@@ -69,15 +61,20 @@ class OllamaProvider(Provider):
         )
 
     def chat(
-        self, messages: list[dict[str, Any]], tools: list[Any], thinking: bool
+        self, messages: list[dict[str, Any]], tools: list[Any], thinking: bool, model: str, context_window: Optional[int],
     ) -> Iterable[dict[str, Any]]:
+        opts = {}
+
+        if context_window is not None:
+            opts["num_ctx"] = context_window
+
         for chunk in self._client_obj().chat(
-            model=MODEL.get(),
+            model=model,
             messages=messages,
             tools=tools,
             stream=True,
             think=thinking,
-            options={"num_ctx": int(CONTEXT_WINDOW.get())},
+            options=opts,
         ):
             yield chunk
 

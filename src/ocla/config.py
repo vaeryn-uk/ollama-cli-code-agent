@@ -3,10 +3,26 @@ import logging
 import os
 import dataclasses
 import json
+import sys
 from typing import Optional, Callable
 
 _have_logged_invalid_config = False
-_cli_values: dict[str, str] = {}
+
+def _cli_value(args: tuple[str]) -> str | None:
+    argv = sys.argv[1:]  # drop the script name
+
+    for i, tok in enumerate(argv):
+        # Case 1 – "--flag=value" form
+        for flag in args:
+            prefix = f"{flag}="
+            if tok.startswith(prefix):
+                return tok[len(prefix):]
+
+        # Case 2 – separate flag & value tokens
+        if tok in args and i + 1 < len(argv):
+            return argv[i + 1]
+
+    return None
 
 
 @dataclasses.dataclass
@@ -21,17 +37,19 @@ class ConfigVar:
     allowed_values: Optional[dict[str, str]] = None
     cli: Optional[tuple[str, ...]] = None
     provider: Optional[str] = None
+    sensitive: bool = False
 
     def get(self) -> str:
         global _have_logged_invalid_config
 
         value = None
 
+        # Restrict provider-specific config vars for non-active providers.
         if self.provider and PROVIDER.get() != self.provider:
-            return self.default
+            return ""
 
-        if self.name in _cli_values:
-            value = _cli_values[self.name]
+        if cli_value := _cli_value(self.cli or ()):
+            value = cli_value
         elif self.env and os.environ.get(self.env):
             value = os.environ.get(self.env)
         elif self.config_file_property:
@@ -87,16 +105,6 @@ def add_cli_args(parser: argparse.ArgumentParser) -> None:
                 ),
                 choices=list(var.allowed_values.keys()) if var.allowed_values else None,
             )
-
-
-def apply_cli_args(args: argparse.Namespace) -> None:
-    """Apply overrides from *args* returned by argparse."""
-    overrides: dict[str, str] = {}
-    for var in CONFIG_VARS.values():
-        if var.cli and hasattr(args, var.name):
-            overrides[var.name] = getattr(args, var.name)
-
-    _cli_values.update(overrides)
 
 
 def _var(var: ConfigVar) -> ConfigVar:
@@ -161,6 +169,18 @@ OLLAMA_HOST_OVERRIDE = _var(
         config_file_property="ollamaHost",
         default="",
         provider="ollama",
+    )
+)
+
+OPENAI_API_KEY = _var(
+    ConfigVar(
+        name="openai_api_key",
+        description="Override the OPENAI_API_KEY for OpenAI calls. Ocla will fall back to OPENAI_API_KEY.",
+        env="OCLA_OPENAI_API_KEY",
+        config_file_property="openaiApiKey",
+        default="",
+        sensitive=True,
+        provider="openai",
     )
 )
 
