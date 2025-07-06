@@ -38,7 +38,7 @@ from ocla.session import (
     generate_session_name,
     session_exists,
     ContextWindowExceededError,
-    load_session_meta,
+    load_session_meta, ProviderMismatchError,
 )
 from ocla.tools import ALL as ALL_TOOLS, ToolSecurity, Tool
 
@@ -347,6 +347,7 @@ def main(argv=None):
             table.add_column("Last Used")
             table.add_column("Tokens")
             table.add_column("% of Context")
+            table.add_column("Provider")
             for s in list_sessions():
                 table.add_row(
                     *(
@@ -359,6 +360,7 @@ def main(argv=None):
                         humanize.naturaltime(datetime.now(get_localzone()) - s.used),
                         str(s.tokens),
                         s.usage_pct(),
+                        s.provider,
                     )
                 )
 
@@ -465,7 +467,11 @@ def main(argv=None):
         set_current_session_name(session_name)
         info(f"Created new session {session_name} and set it as the current session.")
 
-    session = Session(session_name)
+    try:
+        session = Session(session_name)
+    except ProviderMismatchError as e:
+        error(str(e))
+        return
     if get_current_session_name() is None:
         set_current_session_name(session_name)
 

@@ -44,9 +44,9 @@ class ContextWindowExceededError(RuntimeError):
 class ProviderMismatchError(RuntimeError):
     """Raised when an existing session was created with a different provider."""
 
-    def __init__(self, expected: str, actual: str) -> None:
+    def __init__(self, name: str, expected: str, actual: str) -> None:
         super().__init__(
-            f"Session was created with provider '{expected}' but current provider is '{actual}'."
+            f"Session {name} was created with provider '{expected}' but current provider is '{actual}'."
         )
         self.expected = expected
         self.actual = actual
@@ -131,7 +131,7 @@ class Session:
             meta_provider = meta.get("provider")
             if meta_provider:
                 if meta_provider != self.provider:
-                    raise ProviderMismatchError(meta_provider, self.provider)
+                    raise ProviderMismatchError(self.name, meta_provider, self.provider)
                 self.provider = meta_provider
             else:
                 # Upgrade legacy sessions later once messages are loaded
