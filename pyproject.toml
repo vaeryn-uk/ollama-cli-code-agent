@@ -10,6 +10,7 @@ requires-python = ">=3.9"
 authors = [{name = "Example", email = "example@example.com"}]
 dependencies = [
     "ollama",
+    "openai",
     "humanize",
     "rich",
     "tzlocal",

@@ -26,7 +26,8 @@ def generate_table() -> str:
         desc = var.description
         if var.allowed_values:
             allowed = "\n".join(
-                f"  - `{k}`: {v}" if v else f"  - `{k}`" for k, v in var.allowed_values.items()
+                f"  - `{k}`: {v}" if v else f"  - `{k}`"
+                for k, v in var.allowed_values.items()
             )
         else:
             allowed = ""

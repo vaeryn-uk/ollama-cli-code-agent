@@ -4,7 +4,8 @@ import os
 import humanize
 from datetime import datetime
 
-from ollama import Message, ResponseError
+from typing import Any, Dict
+
 from tzlocal import get_localzone
 
 from rich.table import Table
@@ -20,16 +21,15 @@ from ocla.config import (
     LOG_LEVEL,
     CONFIG_VARS,
     add_cli_args,
-    apply_cli_args,
     TOOL_PERMISSION_MODE,
     THINKING,
     THINKING_DISABLED,
     THINKING_ENABLED,
     TOOL_PERMISSION_MODE_DEFAULT,
     TOOL_PERMISSION_MODE_ALWAYS_ALLOW,
-    OLLAMA_HOST_OVERRIDE,
     PROMPT_MODE,
 )
+from ocla.providers import get_provider, ModelInfo
 from ocla.session import (
     Session,
     list_sessions,
@@ -40,8 +40,7 @@ from ocla.session import (
     ContextWindowExceededError,
     load_session_meta,
 )
-from ocla.tools import ALL, ToolSecurity
-import ollama
+from ocla.tools import ALL as ALL_TOOLS, ToolSecurity, Tool
 
 _LOG_LEVEL = LOG_LEVEL.get()
 
@@ -61,7 +60,7 @@ signal.signal(signal.SIGINT, _quit_gracefully)
 if LOG_LEVEL.is_valid():
     logging.basicConfig(level=_LOG_LEVEL)
 
-    # Configure httpx underneath ollama client.
+    # Configure httpx underneath HTTP clients.
     logging.config.dictConfig(
         {
             "version": 1,
@@ -95,39 +94,28 @@ if LOG_LEVEL.is_valid():
         }
     )
 
-_ollama_client: ollama.Client | None = None
+
+provider = get_provider()
 
 
-def _resolve_ollama_host() -> str | None:
-    return (
-        OLLAMA_HOST_OVERRIDE.get()
-        or os.environ.get("OLLAMA_HOST")
-        or "http://localhost:11434"
-    )
-
-
-def _get_ollama_client():
-    global _ollama_client
-    if _ollama_client is None:
-        _ollama_client = ollama.Client(host=_resolve_ollama_host())
-    return _ollama_client
-
-
-def execute_tool(call: ollama.Message.ToolCall) -> str:
-    entry = ALL.get(call.function.name)
+def execute_tool(call: Dict[str, Any]) -> str:
+    fn = call.get("function", {}).get("name")
+    entry = ALL_TOOLS.get(fn)
 
     result = None
 
     if entry is None:
-        err = f"Unknown tool: {call.function.name}"
+        err = f"Unknown tool: {fn}"
     else:
         try:
-            result, err = entry.execute(**(call.function.arguments or {}))
+            result, err = entry.execute(
+                **(call.get("function", {}).get("arguments", {}) or {})
+            )
             result = str(result)
         except Exception as e:
             err = f"Unknown error"
 
-    info(f"Executed tool '{call.function.name}' with {format_tool_arguments(call)}")
+    info(f"Executed tool '{fn}' with {format_tool_arguments(call)}")
 
     if result == "" and not err:
         result = "[[ no output from tool ]]"
@@ -141,11 +129,11 @@ def execute_tool(call: ollama.Message.ToolCall) -> str:
     return err or result
 
 
-def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
+def _confirm_tool(call: Dict[str, Any]) -> bool:
     """Ask the user whether to run this tool call respecting config."""
-    fn = call.function.name
+    fn = call.get("function", {}).get("name")
 
-    tool = ALL.get(call.function.name)
+    tool = ALL_TOOLS.get(fn)
     if not tool:
         error(f"Unknown tool: {fn}")
         return False
@@ -178,61 +166,29 @@ def _confirm_tool(call: ollama.Message.ToolCall) -> bool:
     return False
 
 
-def _model_context_limit(model: str) -> int | None:
-    try:
-        response = _get_ollama_client().show(model)
-    except Exception as e:
-        logging.debug(f"failed to query model info: {e}")
-        return None
-
-    for key in response.modelinfo:
-        if "context_length" in key or "num_ctx" in key:
-            if (
-                isinstance(response.modelinfo[key], str)
-                and response.modelinfo[key].isdigit()
-            ):
-                return int(response.modelinfo[key])
-
-            if type(response.modelinfo[key]) is int:
-                return response.modelinfo[key]
-
-    return None
+def _current_model_info() -> ModelInfo:
+    return provider.model_info(MODEL.get())
 
 
-def _model_supports_thinking() -> bool | None:
-    try:
-        response = _get_ollama_client().show(MODEL.get())
-    except Exception as e:
-        logging.debug(f"failed to query model info: {e}")
-        return None
-
-    if response.capabilities and "thinking" in response.capabilities:
-        return True
-
-    return False
-
-
-def _chat_stream(**kwargs) -> tuple[str, Message]:
+def _chat_stream(messages, tools: list[Tool]) -> tuple[str, Dict[str, Any]]:
     full_content: str = ""
     full_thinking: str = ""
-    tool_calls: list[ollama.Message.ToolCall] = []  # gather all tool calls
+    tool_calls: list[Dict[str, Any]] = []  # gather all tool calls
     last_role: str | None = None  # keep whatever role we see last
 
     thinking_mode = THINKING.get()
-    enable_think = thinking_mode != THINKING_DISABLED and _model_supports_thinking()
+    enable_think = thinking_mode != THINKING_DISABLED and _current_model_info().supports_thinking
     show_thinking = thinking_mode == THINKING_ENABLED
+    num_ctx = int(CONTEXT_WINDOW.get()) if CONTEXT_WINDOW.get() else None
 
-    for chunk in _get_ollama_client().chat(
-        stream=True,
-        think=enable_think,
-        options={"num_ctx": int(CONTEXT_WINDOW.get())},
-        **kwargs,
-    ):
+    for chunk in provider.chat(messages=messages, tools=tools, thinking=enable_think, model=MODEL.get(), context_window=num_ctx):
         msg = chunk.get("message", {})
+        if hasattr(msg, "model_dump"):
+            msg = msg.model_dump(mode="python", by_alias=True)
         last_role = msg.get("role", last_role)
 
         if part := msg.get("content"):
-            full_thinking += part
+            full_content += part
             agent_output(part, thinking=False, end="")
 
         if part := msg.get("thinking"):
@@ -240,16 +196,21 @@ def _chat_stream(**kwargs) -> tuple[str, Message]:
             if show_thinking:
                 agent_output(part, thinking=True, end="")
 
-        if "tool_calls" in msg:
-            tool_calls.extend(msg["tool_calls"])
+        if msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                if hasattr(tc, "model_dump"):
+                    tool_calls.append(tc.model_dump(mode="python", by_alias=True))
+                else:
+                    tool_calls.append(tc)
 
-    # Build a consolidated assistant message
-    assistant_msg = Message(
-        role=last_role or "assistant",
-        content=full_content,
-        thinking=full_thinking,
-        tool_calls=tool_calls,
-    )
+    assistant_msg: Dict[str, Any] = {
+        "role": last_role or "assistant",
+        "content": full_content,
+    }
+    if full_thinking:
+        assistant_msg["thinking"] = full_thinking
+    if tool_calls:
+        assistant_msg["tool_calls"] = tool_calls
 
     return full_content, assistant_msg
 
@@ -263,9 +224,8 @@ def do_chat(session: Session, prompt: str) -> str:
     while True:
         # --- 1️⃣  ask the model ------------------------------------------
         content, msg = _chat_stream(
-            model=model,
-            messages=session.messages,
-            tools=[t.describe() for t in ALL.values()],
+            session.messages,
+            tools=ALL_TOOLS.values(),
         )
         session.add(msg)
         if content:
@@ -286,8 +246,9 @@ def do_chat(session: Session, prompt: str) -> str:
             session.add(
                 {
                     "role": "tool",
-                    "name": call.function.name,
+                    "name": call.get("function", {}).get("name"),
                     "content": tool_output,
+                    "tool_call_id": call.get("id", None), # OpenAI needs this.
                 }
             )
 
@@ -302,7 +263,7 @@ def do_chat(session: Session, prompt: str) -> str:
 
 def _build_arg_parser() -> argparse.ArgumentParser | None:
     parser = argparse.ArgumentParser(
-        description="Interact with a local Ollama model",
+        description="Interact with a language model",
     )
     parser.add_argument(
         "-n",
@@ -324,8 +285,12 @@ def _build_arg_parser() -> argparse.ArgumentParser | None:
     session_set.add_argument("name")
 
     subparsers.add_parser("config", help="Show config information")
-    subparsers.add_parser("model", help="Show model information")
+    model = subparsers.add_parser("model", help="Show model information")
     subparsers.add_parser("tools", help="Display tools made available to the agent")
+
+    model_cmd = model.add_subparsers(dest="model_cmd")
+    model_cmd.add_parser("list", help="Show available models")
+    model_cmd.add_parser("info", help="Show information for the current model")
 
     return parser
 
@@ -334,29 +299,16 @@ def _initialization_check():
     if os.getenv("OCLA_DISABLE_INIT_CHECK"):
         return
 
-    model = MODEL.get()
     try:
-        available = _get_ollama_client().list()
-    except (ResponseError, ConnectionError):
-        error(f"Cannot connect to Ollama at {_resolve_ollama_host()}. Is it running?")
+        provider.initialization_check(MODEL.get())
+    except RuntimeError as e:
+        error(str(e))
         raise SystemExit(1)
 
-    try:
-        _get_ollama_client().show(model)
-    except ResponseError:
-        error(
-            f"Ollama does not have the requested model '{model}'. "
-            "Please pull the model or configure a different one."
-        )
-        info(
-            f"Available models: {', '.join([x.model for x in available.models if x.model])}"
-        )
-        raise SystemExit(1)
-
-    model_ctx = _model_context_limit(model)
+    model_ctx = _current_model_info().context_length
     if model_ctx is None:
         logging.warning(
-            f"Could not determine model context limit from ollama for model {MODEL.get()}"
+            f"Could not determine model context limit from {provider.name} for model {MODEL.get()}"
         )
 
     ctx_conf = int(CONTEXT_WINDOW.get())
@@ -371,9 +323,7 @@ def _initialization_check():
 
 def main(argv=None):
     parser = _build_arg_parser()
-
     args = parser.parse_args(argv)
-    apply_cli_args(args)
 
     for var in CONFIG_VARS.values():
         if validation_err := var.validate():
@@ -431,13 +381,17 @@ def main(argv=None):
         table.add_column("Allowed values", style="")
 
         for var in CONFIG_VARS.values():
+            current_value = var.get() or ""
+            if var.sensitive and current_value:
+                current_value = "************"
+
             table.add_row(
                 var.name,
                 var.description,
                 var.env or "",
                 var.config_file_property or "",
                 var.default or "",
-                var.get() or "",
+                current_value,
                 (
                     "\n".join(
                         [
@@ -453,32 +407,55 @@ def main(argv=None):
         console.print(table)
         return
     elif args.command == "model":
-        table = Table(title="Model info", show_header=False)
+        if args.model_cmd == "info":
+            table = Table(title="Model info", show_header=False)
 
-        table.add_column("key")
-        table.add_column("value")
+            table.add_column("key")
+            table.add_column("value")
 
-        table.add_row("Name", MODEL.get())
+            table.add_row("Name", MODEL.get())
 
-        table.add_section()
-        table.add_row(
-            "Model maximum context window",
-            str(_model_context_limit(MODEL.get())) or "N/A",
-        )
-        table.add_row("Current configured context window", f"{CONTEXT_WINDOW.get()}")
+            table.add_section()
+            table.add_row(
+                "Model maximum context window",
+                str(_current_model_info().context_length) or "N/A",
+            )
+            table.add_row("Current configured context window", f"{CONTEXT_WINDOW.get()}")
 
-        table.add_section()
-        supported = _model_supports_thinking()
-        table.add_row(
-            "Model supports thinking?",
-            "N/A" if supported is None else str(supported),
-        )
-        table.add_row("Current thinking setting", THINKING.get())
+            table.add_section()
+            supported = _current_model_info().supports_thinking
+            table.add_row(
+                "Model supports thinking?",
+                "N/A" if supported is None else str(supported),
+            )
+            table.add_row("Current thinking setting", THINKING.get())
 
-        console.print(table)
-        return
+            console.print(table)
+            return
+        elif args.model_cmd == "list":
+            if len(provider.available_models()) == 0:
+                console.print("No models available")
+                return
+
+            table = Table(title="Available models")
+
+            table.add_column("Model")
+            table.add_column("Supports thinking?")
+            table.add_column("Context window")
+
+            for provider_model in provider.available_models():
+                table.add_row(
+                    provider_model.name,
+                    str(provider_model.supports_thinking) if provider_model.supports_thinking is not None else "Unknown",
+                    str(provider_model.context_length) if provider_model.context_length is not None else "Unknown",
+                )
+
+            console.print(table)
+            return
+        else:
+            parser.error("Invalid model command")
     elif args.command == "tools":
-        for t in ALL.values():
+        for t in ALL_TOOLS.values():
             console.print(t.describe().model_dump(exclude_none=True))
         return
 

@@ -3,8 +3,6 @@ import re
 import fnmatch, glob, os
 from pathlib import Path
 
-import ollama
-
 
 def pascal_to_snake(name: str) -> str:
     """
@@ -21,8 +19,8 @@ def truncate(s: str, limit: int) -> str:
     return s
 
 
-def format_tool_arguments(call: ollama.Message.ToolCall) -> str:
-    raw_args = call.function.arguments
+def format_tool_arguments(call: dict) -> str:
+    raw_args = call.get("function", {}).get("arguments")
     try:
         if isinstance(raw_args, (dict, list)):
             args = json.dumps(raw_args, separators=(",", ":"))

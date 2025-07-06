@@ -3,7 +3,6 @@ import os
 import sys
 import logging
 
-import ollama
 import pytest
 
 from ocla.config import PROMPT_MODE

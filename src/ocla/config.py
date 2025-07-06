@@ -3,10 +3,26 @@ import logging
 import os
 import dataclasses
 import json
+import sys
 from typing import Optional, Callable
 
 _have_logged_invalid_config = False
-_cli_values: dict[str, str] = {}
+
+def _cli_value(args: tuple[str]) -> str | None:
+    argv = sys.argv[1:]  # drop the script name
+
+    for i, tok in enumerate(argv):
+        # Case 1 – "--flag=value" form
+        for flag in args:
+            prefix = f"{flag}="
+            if tok.startswith(prefix):
+                return tok[len(prefix):]
+
+        # Case 2 – separate flag & value tokens
+        if tok in args and i + 1 < len(argv):
+            return argv[i + 1]
+
+    return None
 
 
 @dataclasses.dataclass
@@ -20,14 +36,20 @@ class ConfigVar:
     normalizer: Optional[Callable[[str], str]] = None
     allowed_values: Optional[dict[str, str]] = None
     cli: Optional[tuple[str, ...]] = None
+    provider: Optional[str] = None
+    sensitive: bool = False
 
     def get(self) -> str:
         global _have_logged_invalid_config
 
         value = None
 
-        if self.name in _cli_values:
-            value = _cli_values[self.name]
+        # Restrict provider-specific config vars for non-active providers.
+        if self.provider and PROVIDER.get() != self.provider:
+            return ""
+
+        if cli_value := _cli_value(self.cli or ()):
+            value = cli_value
         elif self.env and os.environ.get(self.env):
             value = os.environ.get(self.env)
         elif self.config_file_property:
@@ -50,6 +72,9 @@ class ConfigVar:
         return value
 
     def validate(self) -> Optional[str]:
+        if self.provider and PROVIDER.get() != self.provider:
+            return None
+
         if self.validator_fn:
             return self.validator_fn(self.get())
 
@@ -82,16 +107,6 @@ def add_cli_args(parser: argparse.ArgumentParser) -> None:
             )
 
 
-def apply_cli_args(args: argparse.Namespace) -> None:
-    """Apply overrides from *args* returned by argparse."""
-    overrides: dict[str, str] = {}
-    for var in CONFIG_VARS.values():
-        if var.cli and hasattr(args, var.name):
-            overrides[var.name] = getattr(args, var.name)
-
-    _cli_values.update(overrides)
-
-
 def _var(var: ConfigVar) -> ConfigVar:
     CONFIG_VARS[var.name] = var
     return var
@@ -104,6 +119,21 @@ CONFIG_FILE = _var(
         env="OCLA_CONFIG_FILE",
         config_file_property=None,
         default=os.path.join(".", ".ocla", "config.json"),
+    )
+)
+
+PROVIDER = _var(
+    ConfigVar(
+        name="provider",
+        description="Model provider to use",
+        env="OCLA_PROVIDER",
+        config_file_property="provider",
+        default="ollama",
+        cli=("-p", "--provider"),
+        allowed_values={
+            "ollama": "Use local Ollama models",
+            "openai": "Use the OpenAI API",
+        },
     )
 )
 
@@ -138,6 +168,19 @@ OLLAMA_HOST_OVERRIDE = _var(
         env="OCLA_OLLAMA_HOST",
         config_file_property="ollamaHost",
         default="",
+        provider="ollama",
+    )
+)
+
+OPENAI_API_KEY = _var(
+    ConfigVar(
+        name="openai_api_key",
+        description="Override the OPENAI_API_KEY for OpenAI calls. Ocla will fall back to OPENAI_API_KEY.",
+        env="OCLA_OPENAI_API_KEY",
+        config_file_property="openaiApiKey",
+        default="",
+        sensitive=True,
+        provider="openai",
     )
 )
 
@@ -266,7 +309,7 @@ PROMPT_MODE = _var(
         env="OCLA_PROMPT_MODE",
         config_file_property="promptMode",
         default="INTERACTIVE",
-        cli=("-p", "--prompt-mode"),
+        cli=("-pm", "--prompt-mode"),
         normalizer=lambda x: x.upper(),
         allowed_values={
             "ONESHOT": "The program quits after a single prompt",
