@@ -444,8 +444,8 @@ def main(argv=None):
             for provider_model in provider.available_models():
                 table.add_row(
                     provider_model.name,
-                    str(provider_model.supports_thinking),
-                    str(provider_model.context_length) or "Unknown",
+                    str(provider_model.supports_thinking) if provider_model.supports_thinking is not None else "Unknown",
+                    str(provider_model.context_length) if provider_model.context_length is not None else "Unknown",
                 )
 
             console.print(table)
