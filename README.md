@@ -1,8 +1,18 @@
 # Ollama CLI Code Agent
 
-This project provides a command-line interface that wraps an AI agent powered by Ollama.
-Use it to generate code, analyze repositories and manage development tasks directly from
-your terminal.
+A hobby project implementing an experimental command-line coding agent.
+Use it to generate code, analyze repositories, and manage development tasks directly from your terminal.
+
+## Features
+
+- Ollama-first; local LLM support.
+- OpenAI support for more powerful models.
+- Session management and context usage tracking.
+- Project-centric storage and configuration.
+
+## Dependencies & Installation
+
+TODO.
 
 ## Configuration
 
