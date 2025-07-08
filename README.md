@@ -12,12 +12,21 @@ Functionality, performance, and APIs are subject to change without notice.**
 - OpenAI support for more powerful models.
 - Session management and context usage tracking.
 - Project-centric storage and configuration.
+- Support for Linux & Windows.
 
 ## Dependencies & Installation
 
 TODO.
 
 ## Configuration
+
+`ocla` supports configuration through three sources, in the following order of precedence (highest to lowest):
+
+- Command-line arguments
+- Environment variables
+- Configuration file – `.ocla/config.json` in the current working directory
+
+Each configuration setting specifies which of these sources it supports.
 
 <!-- CONFIG_TABLE_START -->
 ### config_file
