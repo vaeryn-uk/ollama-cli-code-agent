@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.urls]
-Github="https://github.com/vaeryn-uk/ollama-cli-code-agent"
+Repository="https://github.com/vaeryn-uk/ollama-cli-code-agent"
 
 [project.scripts]
 ocla = "ocla.cli:main"
