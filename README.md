@@ -3,6 +3,9 @@
 A hobby project implementing an experimental command-line coding agent.
 Use it to generate code, analyze repositories, and manage development tasks directly from your terminal.
 
+**Warning: This is experimental software and may be unstable or incomplete. Use at your own risk. 
+Functionality, performance, and APIs are subject to change without notice.**
+
 ## Features
 
 - Ollama-first; local LLM support.
