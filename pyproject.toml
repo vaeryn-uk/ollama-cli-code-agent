@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ocla"
-version = "0.1.0"
+version = "0.1.1"
 description = "CLI coding agent using ollama for local LLMs"
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
