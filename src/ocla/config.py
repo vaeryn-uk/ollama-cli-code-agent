@@ -153,7 +153,7 @@ CONTEXT_WINDOW = _var(
 MODEL = _var(
     ConfigVar(
         name="model",
-        description="The model to use for agent inference. Must be available in the Ollama API",
+        description="The model to use for agent inference. Must be available in the currently active provider",
         env="OCLA_MODEL",
         config_file_property="model",
         default="qwen3",

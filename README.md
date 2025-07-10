@@ -1,4 +1,4 @@
-# Ollama CLI Code Agent
+# ocla: CLI Coding Agent
 
 A hobby project implementing an experimental command-line coding agent.
 Use it to generate code, analyze repositories, and manage development tasks directly from your terminal.
@@ -16,7 +16,76 @@ Functionality, performance, and APIs are subject to change without notice.**
 
 ## Dependencies & Installation
 
-TODO.
+`ocla` can be installed through [`uv`](https://github.com/astral-sh/uv):
+
+```
+uv pip install --system ocla
+```
+
+### Ollama
+
+`ocla` integrates with [Ollama](https://ollama.com/) to run models locally.
+
+Download & install ollama, then download a model:
+
+```
+ollama pull qwen3
+```
+
+And start the Ollama API:
+
+```
+ollama serve
+```
+
+Then confirm that we can connect:
+
+```
+ocla model list
+```
+
+You can tweak the `ollama_host` setting described below to direct ocla to the correct endpoint. By default,
+ocla expects ollama to be running at `http://localhost:11434`. ocla will respect the `OLLAMA_HOST`
+environment variable if `ollama_host` is not configured.
+
+### OpenAI
+
+You will need to configure ocla via the `provider` and `openai_api_key` settings described below.
+
+## Usage
+
+Simply running `ocla` will initiate prompt input to give instructions to the agent. Prompts can also
+be fed from stdin.
+
+```
+echo "find a bug for me" | ocla
+```
+
+`ocla` utilizes sessions to iterate on tasks, with a new session automatically created if one
+is not already active. By default, running ocla will use the same session as previous invocations.
+You can force a new session with the `-n` flag:
+
+```
+echo "This is a fresh conversation" | ocla -n 
+```
+
+The current session is stored in `./.ocla/state.json`, and available sessions can be managed:
+
+```
+ocla session list               # show all saved sessions
+ocla session set <session-name> # make <session-name> the active session.
+```
+
+_**WARNING**: session data itself (including your prompts) is stored in `./.ocla/sessions`. Empty this directory
+to do a hard delete of your conversations. You should add `.ocla` to your `.gitignore` to ensure this
+data is never stored in VCS._
+
+By default, `ocla` will continue to offer prompt interactively until you explicitly quit (`q`). You can change
+this to have `ocla` read a single prompt then quit with the `-pm` flag (see `prompt_mode` below):
+
+```
+echo "how do i define a type in typescript?" | ocla -n -pm ONESHOT
+```
 
 ## Configuration
 
@@ -84,6 +153,16 @@ Override the OLLAMA_HOST for the Ollama API
 - **Default value:** `N/A`
 
 
+### openai_api_key
+
+Override the OPENAI_API_KEY for OpenAI calls. Ocla will fall back to OPENAI_API_KEY.
+
+- **CLI:** `N/A`
+- **Environment variable:** `OCLA_OPENAI_API_KEY`
+- **Config file:** `openaiApiKey`
+- **Default value:** `N/A`
+
+
 ### project_context_file
 
 the relative path to a file that gives ocla more context about your project (case-insensitive)
@@ -98,7 +177,7 @@ the relative path to a file that gives ocla more context about your project (cas
 
 How you want to interact with the assistant
 
-- **CLI:** `-p --prompt-mode`
+- **CLI:** `-pm --prompt-mode`
 - **Environment variable:** `OCLA_PROMPT_MODE`
 - **Config file:** `promptMode`
 - **Default value:** `INTERACTIVE`
@@ -110,7 +189,7 @@ How you want to interact with the assistant
 
 Model provider to use
 
-- **CLI:** `N/A`
+- **CLI:** `-p --provider`
 - **Environment variable:** `OCLA_PROVIDER`
 - **Config file:** `provider`
 - **Default value:** `ollama`
