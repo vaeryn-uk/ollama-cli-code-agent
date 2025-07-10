@@ -135,7 +135,7 @@ Log level
 
 ### model
 
-The model to use for agent inference. Must be available in the Ollama API
+The model to use for agent inference. Must be available in the currently active provider
 
 - **CLI:** `-m --model`
 - **Environment variable:** `OCLA_MODEL`
