@@ -292,6 +292,21 @@ def _build_arg_parser() -> argparse.ArgumentParser | None:
     model_cmd.add_parser("list", help="Show available models")
     model_cmd.add_parser("info", help="Show information for the current model")
 
+    index_parser = subparsers.add_parser("index", help="Manage RAG index")
+    index_sub = index_parser.add_subparsers(dest="index_cmd")
+    index_create = index_sub.add_parser("create", help="Create project index")
+    index_create.add_argument("--path", default=".", help="Project directory")
+    index_create.add_argument(
+        "--index", default=".ocla_index.json", help="Index file path"
+    )
+
+    index_search = index_sub.add_parser("search", help="Search project index")
+    index_search.add_argument("query")
+    index_search.add_argument(
+        "--index", default=".ocla_index.json", help="Index file path"
+    )
+    index_search.add_argument("--top", type=int, default=5, help="Results to show")
+
     return parser
 
 
@@ -459,6 +474,19 @@ def main(argv=None):
     elif args.command == "tools":
         for t in ALL_TOOLS.values():
             console.print(t.describe().model_dump(exclude_none=True))
+        return
+    elif args.command == "index":
+        from . import rag
+
+        if args.index_cmd == "create":
+            rag.create_index(args.path, args.index)
+            info(f"Index written to {args.index}")
+        elif args.index_cmd == "search":
+            results = rag.query_index(args.query, args.index, args.top)
+            for path, score in results:
+                print(f"{path}\t{score:.4f}")
+        else:
+            parser.error("Invalid index command")
         return
 
     session_name = get_current_session_name() or generate_session_name()

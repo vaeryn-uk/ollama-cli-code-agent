@@ -87,6 +87,21 @@ this to have `ocla` read a single prompt then quit with the `-pm` flag (see `pro
 echo "how do i define a type in typescript?" | ocla -n -pm ONESHOT
 ```
 
+### Project indexing
+
+Ocla can build a lightweight index of your project files to enable retrieval-based prompts.
+Create the index with:
+
+```
+ocla index create --path . --index .ocla_index.json
+```
+
+Search it later with:
+
+```
+ocla index search "search term" --index .ocla_index.json
+```
+
 ## Configuration
 
 `ocla` supports configuration through three sources, in the following order of precedence (highest to lowest):
