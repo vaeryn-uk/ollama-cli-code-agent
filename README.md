@@ -89,7 +89,7 @@ echo "how do i define a type in typescript?" | ocla -n -pm ONESHOT
 
 ### Project indexing
 
-Ocla can build a lightweight index of your project files to enable retrieval-based prompts.
+Ocla can build an embedding based vector index of your project files to enable retrieval-based prompts.
 Create the index with:
 
 ```

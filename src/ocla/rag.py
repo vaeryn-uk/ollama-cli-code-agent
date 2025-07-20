@@ -1,20 +1,20 @@
-import os
-import re
+import hashlib
 import json
 import math
-from collections import Counter
-from typing import Dict, List, Tuple
+import os
+import re
+from typing import Dict, Iterable, List, Tuple
 
 TOKEN_PATTERN = re.compile(r"\b\w+\b")
+EMBED_DIM = 64
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> Iterable[str]:
     return TOKEN_PATTERN.findall(text.lower())
 
 
-def _iter_files(directory: str):
+def _iter_files(directory: str) -> Iterable[str]:
     for root, dirs, files in os.walk(directory):
-        # skip typical non-source directories
         if ".git" in dirs:
             dirs.remove(".git")
         if ".venv" in dirs:
@@ -26,39 +26,34 @@ def _iter_files(directory: str):
                 yield os.path.join(root, name)
 
 
-def create_index(directory: str, index_path: str) -> None:
-    """Create a simple TF-IDF index of source files."""
-    documents: Dict[str, Counter[str]] = {}
-    df: Counter[str] = Counter()
+def _embed(text: str, dim: int = EMBED_DIM) -> List[float]:
+    tokens = list(_tokenize(text))
+    vec = [0.0] * dim
+    if not tokens:
+        return vec
+    for token in tokens:
+        h = hashlib.md5(token.encode()).digest()
+        for i, byte in enumerate(h):
+            vec[i % dim] += (byte / 255.0)
+    norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+    return [v / norm for v in vec]
 
+
+def create_index(directory: str, index_path: str) -> None:
+    """Create an embedding-based vector index of project files."""
+    vectors: Dict[str, List[float]] = {}
     for path in _iter_files(directory):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 text = f.read()
         except Exception:
             continue
-        tokens = _tokenize(text)
-        if not tokens:
-            continue
-        counts = Counter(tokens)
-        documents[path] = counts
-        for w in counts.keys():
-            df[w] += 1
-
-    n_docs = len(documents) or 1
-    idf: Dict[str, float] = {w: math.log(n_docs / (1 + c)) + 1 for w, c in df.items()}
-
-    tfidf_docs: Dict[str, Dict[str, float]] = {}
-    for path, counts in documents.items():
-        total = sum(counts.values()) or 1
-        tfidf_docs[path] = {w: (counts[w] / total) * idf[w] for w in counts}
-
-    index = {"idf": idf, "documents": tfidf_docs}
+        vectors[path] = _embed(text)
     with open(index_path, "w", encoding="utf-8") as f:
-        json.dump(index, f)
+        json.dump({"dim": EMBED_DIM, "vectors": vectors}, f)
 
 
-def _load_index(index_path: str):
+def _load_index(index_path: str) -> Dict[str, object]:
     with open(index_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -66,28 +61,15 @@ def _load_index(index_path: str):
 def query_index(query: str, index_path: str, top_k: int = 5) -> List[Tuple[str, float]]:
     """Return the top matching files for *query* from the index."""
     data = _load_index(index_path)
-    idf: Dict[str, float] = data.get("idf", {})
-    docs: Dict[str, Dict[str, float]] = data.get("documents", {})
-    n_docs = len(docs) or 1
-
-    q_tokens = _tokenize(query)
-    q_counts = Counter(q_tokens)
-    total = sum(q_counts.values()) or 1
-    q_vec: Dict[str, float] = {}
-    for w, c in q_counts.items():
-        idf_val = idf.get(w, math.log(n_docs / 1) + 1)
-        q_vec[w] = (c / total) * idf_val
-
-    q_norm = math.sqrt(sum(v * v for v in q_vec.values())) or 1.0
-
+    dim = data.get("dim", EMBED_DIM)
+    vectors: Dict[str, List[float]] = data.get("vectors", {})
+    q_vec = _embed(query, dim)
+    q_norm = math.sqrt(sum(v * v for v in q_vec)) or 1.0
     results = []
-    for path, vec in docs.items():
-        dot = 0.0
-        d_norm = math.sqrt(sum(v * v for v in vec.values())) or 1.0
-        for w, qv in q_vec.items():
-            dot += qv * vec.get(w, 0.0)
+    for path, vec in vectors.items():
+        d_norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+        dot = sum(q * d for q, d in zip(q_vec, vec))
         score = dot / (q_norm * d_norm)
         results.append((path, score))
-
     results.sort(key=lambda x: x[1], reverse=True)
     return results[:top_k]
